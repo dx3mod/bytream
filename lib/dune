@@ -1,2 +1,3 @@
 (library
- (public_name bytream))
+ (public_name bytream)
+ (libraries bstr))
