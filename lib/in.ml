@@ -1,8 +1,10 @@
 type t = {
-  mutable acquire_chunk : unit -> Bstr.t;
-  mutable buffer : Bstr.t;
-  mutable offset : int;
-  overlap_buffer : Bstr.t;
+  mutable acquire_chunk : unit -> buffer;
+  mutable buffer : buffer;
+  mutable offset : int;  (** Buffer's offset *)
+  mutable total_offset : int;  (** total read bytes from some source *)
+  overlap_buffer : buffer;
+      (** A small buffer to resolve the data gap situation between chunks *)
 }
 
 and buffer =
@@ -17,6 +19,7 @@ let make acquire_chunk =
     acquire_chunk;
     buffer = Bstr.empty;
     offset = 0;
+    total_offset = 0;
     overlap_buffer = Bstr.create 0xff;
   }
 
@@ -25,6 +28,7 @@ let of_buffer buffer =
     acquire_chunk = (fun () -> failwith "invalid state");
     buffer;
     offset = 0;
+    total_offset = 0;
     overlap_buffer = Bstr.empty;
   }
 
@@ -50,20 +54,33 @@ let of_channel ?(buffer_size = 4096) ic =
 let[@inline] available_to_read in_stream =
   Bstr.length in_stream.buffer - in_stream.offset
 
-let consume_bytes in_stream len =
-  if available_to_read in_stream >= len then
-    in_stream.offset <- in_stream.offset + len
-  else failwith "bound of index for bytes consuming"
+let advance_offset in_stream n =
+  in_stream.offset <- in_stream.offset + n;
+  in_stream.total_offset <- in_stream.total_offset + n
+
+let acquire_chunk in_stream =
+  let chunk = in_stream.acquire_chunk () in
+  if Bstr.is_empty chunk then raise End_of_file else chunk
 
 let set_chunk in_stream chunk =
   in_stream.buffer <- chunk;
   in_stream.offset <- 0
 
 let get_chunk in_stream = Bstr.shift in_stream.buffer in_stream.offset
+let position in_stream = in_stream.total_offset
 
-let acquire_chunk in_stream =
-  let chunk = in_stream.acquire_chunk () in
-  if Bstr.is_empty chunk then raise End_of_file else chunk
+let rec consume_bytes in_stream len =
+  if len <> 0 then begin
+    let available_bytes = available_to_read in_stream in
+    let available_to_consume = min available_bytes len in
+
+    advance_offset in_stream available_to_consume;
+
+    if available_to_consume < len then begin
+      set_chunk in_stream @@ acquire_chunk in_stream;
+      consume_bytes in_stream (len - available_to_consume)
+    end
+  end
 
 (* ===================================================================
     INPUTS

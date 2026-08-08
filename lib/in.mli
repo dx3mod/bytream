@@ -58,16 +58,17 @@ val available_to_read : t -> int
     available to read. *)
 
 val consume_bytes : t -> int -> unit
-(** [consume_bytes in_stream len] consume [len] bytes from buffer with [offset]
-    shifting.
-
-    @raise Failure if [len] is more than [buffer]'s length *)
+(** [consume_bytes in_stream len] consume [len] bytes from incoming bytes stream
+    with [offset] shifting. *)
 
 val ensure_chunk : t -> int -> buffer
 (** [ensure_chunk in_stream len] returns {!buffer} value that guarantee have
     [len] bytes.
 
     @raise End_of_file if the [in_stream] was ended *)
+
+val position : t -> int
+(** [position in_stream] returns total read bytes from some source. *)
 
 (** {1 Input} *)
 
