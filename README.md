@@ -6,7 +6,7 @@ This library contains angostic I/O runtime mechanisms for organization byte stre
 
 Features
 * Byte-oriented processing of I/O via slice-based abstraction inspired by the [Bytesrw] library
-* Scatter/gather friendly input and output for more efficient use of subsystem resources
+* Gigabytes throughput with less memory allocation using fixed buffers
 * Channels-like APIs make it possible to write natural OCaml code in a direct style
 
 ## License

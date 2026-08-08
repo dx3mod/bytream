@@ -5,3 +5,4 @@
     buildings codecs and protocol implementations. *)
 
 module In = In
+module Out = Out
