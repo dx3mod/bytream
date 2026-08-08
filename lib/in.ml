@@ -5,6 +5,9 @@ type t = {
   overlap_buffer : Bstr.t;
 }
 
+and buffer =
+  (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+
 (* ===================================================================
     CONSTRUCTORS
    =================================================================== *)
@@ -27,6 +30,19 @@ let of_buffer buffer =
 
 let of_string s = Bstr.of_string s |> of_buffer
 
+let of_channel ?(buffer_size = 4096) ic =
+  let buffer = Bstr.create buffer_size in
+
+  let acquire_chunk () =
+    match In_channel.input_bigarray ic buffer 0 buffer_size with
+    | 0 -> Bstr.empty
+    | len ->
+        (* NOTE: performance issue because allocate BA-proxy value more expensive than it can be  *)
+        Bstr.sub buffer ~off:0 ~len
+  in
+
+  make acquire_chunk
+
 (* ===================================================================
     BUFFER MANIPULATION UTILITY FUNCTIONS
    =================================================================== *)
@@ -37,12 +53,17 @@ let[@inline] available_to_read in_stream =
 let consume_bytes in_stream len =
   if available_to_read in_stream >= len then
     in_stream.offset <- in_stream.offset + len
+  else failwith "bound of index for bytes consuming"
 
 let set_chunk in_stream chunk =
   in_stream.buffer <- chunk;
   in_stream.offset <- 0
 
 let get_chunk in_stream = Bstr.shift in_stream.buffer in_stream.offset
+
+let acquire_chunk in_stream =
+  let chunk = in_stream.acquire_chunk () in
+  if Bstr.is_empty chunk then raise End_of_file else chunk
 
 (* ===================================================================
     INPUTS
@@ -54,7 +75,7 @@ let rec gen_input
   let available_bytes = available_to_read in_stream in
 
   if available_bytes = 0 then (
-    set_chunk in_stream @@ in_stream.acquire_chunk ();
+    set_chunk in_stream @@ acquire_chunk in_stream;
     gen_input ~blit in_stream buffer off len)
   else
     let batched_bytes = min len available_bytes in
@@ -111,6 +132,10 @@ let ensure_bytes_at in_stream len =
   consume_bytes in_stream len;
   offset
 
+let ensure_chunk in_stream len =
+  let off = ensure_bytes_at in_stream len in
+  Bstr.sub in_stream.buffer ~off ~len
+
 (* ===================================================================
     INPUT INTEGER VALUES
    =================================================================== *)
@@ -146,12 +171,12 @@ let[@inline] input_int64_le in_stream = gen_get in_stream Bstr.get_int64_le 4
     OTHER
    =================================================================== *)
 
-let take n in_stream =
-  let bytes = Bytes.create n in
-  really_input_bytes in_stream bytes 0 n;
+let input_string in_stream len =
+  let bytes = Bytes.create len in
+  really_input_bytes in_stream bytes 0 len;
   Bytes.unsafe_to_string bytes
 
-let take_while ?max p in_stream =
+let input_while ?max p in_stream =
   let buffer = Buffer.create 0x0f in
   let max_len = Option.value max ~default:Int.max_int in
 
