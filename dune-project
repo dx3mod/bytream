@@ -2,6 +2,8 @@
 
 (name bytream)
 
+(version 0.1)
+
 (generate_opam_files true)
 
 (source
@@ -18,6 +20,8 @@
 (package
  (name bytream)
  (synopsis "A streaming bytes and crunching them library")
- (description "A longer description")
- (depends ocaml)
- (tags ()))
+ (description
+  "This library contains angostic I/O runtime mechanisms for organization byte streams processing for write and read in an efficient manner, e.g. for buildings codecs and protocol implementations.")
+ (depends ocaml bstr)
+ (tags
+  (bytes streaming)))
