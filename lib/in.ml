@@ -87,10 +87,16 @@ let rec consume_bytes in_stream len =
 let rec gen_input
     ~(blit : Bstr.t -> src_off:int -> 'buf -> dst_off:int -> len:int -> unit)
     in_stream buffer off len =
+  assert (len > 0);
+
   let available_bytes = available_to_read in_stream in
 
   if available_bytes = 0 then (
-    set_chunk in_stream @@ acquire_chunk in_stream;
+    let chunk = acquire_chunk in_stream in
+
+    if Bstr.is_empty chunk then raise End_of_file;
+
+    set_chunk in_stream chunk;
     gen_input ~blit in_stream buffer off len)
   else
     let batched_bytes = min len available_bytes in
@@ -98,7 +104,7 @@ let rec gen_input
     blit in_stream.buffer ~src_off:in_stream.offset buffer ~dst_off:off
       ~len:batched_bytes;
 
-    consume_bytes in_stream batched_bytes;
+    advance_offset in_stream batched_bytes;
 
     batched_bytes
 
@@ -144,7 +150,7 @@ let ensure_bytes in_stream len =
 let ensure_bytes_at in_stream len =
   ensure_bytes in_stream len;
   let offset = in_stream.offset in
-  consume_bytes in_stream len;
+  advance_offset in_stream len;
   offset
 
 let ensure_chunk in_stream len =
