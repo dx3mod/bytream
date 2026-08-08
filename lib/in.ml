@@ -58,9 +58,7 @@ let advance_offset in_stream n =
   in_stream.offset <- in_stream.offset + n;
   in_stream.total_offset <- in_stream.total_offset + n
 
-let acquire_chunk in_stream =
-  let chunk = in_stream.acquire_chunk () in
-  if Bstr.is_empty chunk then raise End_of_file else chunk
+let[@inline] acquire_chunk in_stream = in_stream.acquire_chunk ()
 
 let set_chunk in_stream chunk =
   in_stream.buffer <- chunk;
