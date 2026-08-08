@@ -198,15 +198,23 @@ let input_while ?max p in_stream =
   let max_len = Option.value max ~default:Int.max_int in
 
   let rec aux count =
-    if count < max_len then (
+    if count < max_len then
       let ch = input_char in_stream in
-      if p ch then Buffer.add_char buffer ch;
-      aux (succ count))
+
+      if p ch then begin
+        Buffer.add_char buffer ch;
+        aux (succ count)
+      end
   in
 
   aux 0;
 
   Buffer.contents buffer
+
+let input_while' ~max p in_stream =
+  let string = input_while ~max p in_stream in
+  consume_bytes in_stream (max - String.length string);
+  string
 
 (* ===================================================================
     TRANSFORMING

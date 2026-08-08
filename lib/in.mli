@@ -101,6 +101,10 @@ val input_while : ?max:int -> (char -> bool) -> t -> string
 
     @param ?max determined the maximum length of the input string *)
 
+val input_while' : max:int -> (char -> bool) -> t -> string
+(** [input_while ~max p in_stream] same as {!input_while} but consuming
+    remaining bytes until maximum. *)
+
 (** {2 Integers inputs} *)
 
 (** Input bytes and decode them into integer values. *)
