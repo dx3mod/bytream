@@ -23,21 +23,31 @@ type t
 
 and buffer =
   (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
-(** Flatten bytes-oriented {!Bigarray} buffer. *)
+(** Flatten bytes-oriented [Bigarray] buffer. *)
 
 (** {1 Constructors} *)
 
 val make : (unit -> buffer) -> t
-(** [make acquire_chunk] *)
+(** [make acquire_chunk] construct incoming byte stream from reader function.
+
+    @param acquire_chunk
+      is a function that reads a chunk from any given source. If the chunk is
+      empty, it is equivalent to {!End_of_file}. *)
 
 val of_buffer : buffer -> t
-(** [of_buffer buffer] *)
+(** [of_buffer buffer] construct byte stream from already complete buffer.
+
+    {b Note}. An attempt to acquire a new chunk will cause an exception to be
+    thrown. *)
 
 val of_string : string -> t
-(** [of_string string] *)
+(** [of_string string] same as {!of_buffer} but for [string] value.
+
+    {b Note}. Keep in mind that the string will be copied! *)
 
 val of_channel : ?buffer_size:int -> in_channel -> t
-(** [of_channel ?buffer_size ic]
+(** [of_channel ?buffer_size ic] construct incoming byte stream from
+    [In_channel] value
 
     @param ?buffer_size by default is 4096 bytes *)
 
@@ -82,13 +92,17 @@ val really_input_bytes : t -> bytes -> int -> int -> unit
 (** {2 Substrings inputs} *)
 
 val input_string : t -> int -> string
-(** [input_string in_stream len] input [len]-sized string.
-
-    @see "Input" *)
+(** [input_string in_stream len] input [len]-sized string. *)
 
 val input_while : ?max:int -> (char -> bool) -> t -> string
+(** [input_while ?max p in_stream] input byte while [p] on the byte returns
+    [true].
+
+    @param ?max determined the maximum length of the input string *)
 
 (** {2 Integers inputs} *)
+
+(** Input bytes and decode them into integer values. *)
 
 val input_char : t -> char
 val input_int8 : t -> int
