@@ -226,10 +226,24 @@ val input_while' : max:int -> (char -> bool) -> t -> string
 
 (** {2 Input combinators} *)
 
-val take : int -> t -> (t -> 'a) -> 'a list
-(** [take n in_stream input_value]
+val take : int -> (t -> 'a) -> t -> 'a list
+(** [take n input_value in_stream]
 
-    Call [input_value] [n] times and save function's results in list. *)
+    Call [input_value] [n]-times and save the function's results in a list. *)
+
+val with_size : (t -> 'a) -> t -> 'a * int
+(** [with_size f in_stream]
+
+    @return (value, size)
+
+    A value and a number of bytes were inputted by the [f] function.
+
+    {b Example}
+
+    {[
+    let section, section_size = Bytream.In.with_size input_section in_stream in
+    (* ... *)
+    ]} *)
 
 (** {2 Inputting integer values} *)
 

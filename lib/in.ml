@@ -182,7 +182,14 @@ let ensure_buffer in_stream len =
     COMBINATORS
    =================================================================== *)
 
-let take n in_stream input_value = List.init n @@ fun _ -> input_value in_stream
+let take n input_value in_stream = List.init n @@ fun _ -> input_value in_stream
+
+let with_size f in_stream =
+  let off = position in_stream in
+  let result = f in_stream in
+  let off' = position in_stream in
+
+  (result, off' - off)
 
 (* ===================================================================
     INPUT INTEGER VALUES
