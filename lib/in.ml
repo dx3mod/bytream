@@ -2,7 +2,7 @@ type t = {
   mutable reader : unit -> chunk;
   mutable buffer : buffer;
   mutable offset : int;  (** Buffer's offset *)
-  mutable length : int;  (** Buffer's length *)
+  mutable length : int;  (** Buffer's length with automatic increase *)
   mutable total_offset : int;  (** Total read bytes from some source *)
   overlap_buffer : buffer;
       (** A small buffer to resolve the data gap situation between chunks *)
@@ -62,10 +62,11 @@ let of_channel ?(io_buffer_size = 4096) ic =
     BUFFER MANIPULATION UTILITY FUNCTIONS
    =================================================================== *)
 
-let[@inline] available_to_read in_stream =
-  Bstr.length in_stream.buffer - in_stream.offset
+let[@inline] available_to_read in_stream = in_stream.length
 
 let advance_offset in_stream n =
+  assert (in_stream.length >= n);
+
   in_stream.offset <- in_stream.offset + n;
   in_stream.length <- in_stream.length - n;
   in_stream.total_offset <- in_stream.total_offset + n
@@ -164,7 +165,11 @@ let ensure_bytes_at in_stream len =
   advance_offset in_stream len;
   offset
 
-let ensure_chunk in_stream len =
+let ensure_chunk in_stream length =
+  let offset = ensure_bytes_at in_stream length in
+  (~buffer:in_stream.buffer, ~offset, ~length)
+
+let ensure_buffer in_stream len =
   let off = ensure_bytes_at in_stream len in
   Bstr.sub in_stream.buffer ~off ~len
 
