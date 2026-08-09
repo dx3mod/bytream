@@ -1,9 +1,12 @@
 type t = {
   mutable reader : unit -> chunk;
+  (* Current chunk *)
   mutable buffer : buffer;
   mutable offset : int;  (** Buffer's offset *)
-  mutable length : int;  (** Buffer's length with automatic increase *)
+  mutable length : int;  (** Actual buffer's length *)
+  (* *)
   mutable total_offset : int;  (** Total read bytes from some source *)
+  (* *)
   overlap_buffer : buffer;
       (** A small buffer to resolve the data gap situation between chunks *)
 }
@@ -37,7 +40,7 @@ let make ?overlap_size reader =
 
 let of_buffer buffer =
   {
-    reader = (fun () -> (~buffer:Bstr.empty, ~offset:0, ~length:0));
+    reader = (fun () -> raise End_of_file);
     buffer;
     offset = 0;
     length = 0;
@@ -65,8 +68,7 @@ let of_channel ?(io_buffer_size = 4096) ic =
 let[@inline] available_to_read in_stream = in_stream.length
 
 let advance_offset in_stream n =
-  assert (in_stream.length >= n);
-
+  (* assert (in_stream.length - n >= 0); *)
   in_stream.offset <- in_stream.offset + n;
   in_stream.length <- in_stream.length - n;
   in_stream.total_offset <- in_stream.total_offset + n
@@ -81,7 +83,7 @@ let set_chunk in_stream ((~buffer, ~offset, ~length) : chunk) =
 let get_chunk in_stream =
   (~buffer:in_stream.buffer, ~offset:in_stream.offset, ~length:in_stream.length)
 
-let position in_stream = in_stream.total_offset
+let[@inline] position in_stream = in_stream.total_offset
 
 let rec consume_bytes in_stream len =
   if len <> 0 then begin
@@ -100,25 +102,25 @@ let rec consume_bytes in_stream len =
     INPUTS
    =================================================================== *)
 
-let rec gen_input
+let gen_input
     ~(blit : Bstr.t -> src_off:int -> 'buf -> dst_off:int -> len:int -> unit)
     in_stream buffer off len =
   assert (len > 0);
 
   let available_bytes = available_to_read in_stream in
 
-  if available_bytes = 0 then (
-    set_chunk in_stream (acquire_chunk in_stream);
-    gen_input ~blit in_stream buffer off len)
-  else
-    let batched_bytes = min len available_bytes in
+  if available_bytes = 0 then begin
+    set_chunk in_stream (acquire_chunk in_stream)
+  end;
 
-    blit in_stream.buffer ~src_off:in_stream.offset buffer ~dst_off:off
-      ~len:batched_bytes;
+  let batched_bytes = min len available_bytes in
 
-    advance_offset in_stream batched_bytes;
+  blit in_stream.buffer ~src_off:in_stream.offset buffer ~dst_off:off
+    ~len:batched_bytes;
 
-    batched_bytes
+  advance_offset in_stream batched_bytes;
+
+  batched_bytes
 
 let rec gen_really_input ~blit in_stream buffer off len =
   if len > 0 then
@@ -151,13 +153,16 @@ let push_back in_stream chunk =
       chunk)
 
 let ensure_bytes in_stream length =
-  (* assert (len <= Bstr.length in_stream.overlap_buffer); *)
-  if available_to_read in_stream < length then begin
-    really_input in_stream in_stream.overlap_buffer 0 length;
+  (* assert (length <= Bstr.length in_stream.overlap_buffer); *)
+  let available_bytes = available_to_read in_stream in
 
-    push_back in_stream @@ get_chunk in_stream;
-    set_chunk in_stream (~buffer:in_stream.overlap_buffer, ~offset:0, ~length)
-  end
+  if available_bytes < length then
+    if available_bytes <> 0 then (
+      really_input in_stream in_stream.overlap_buffer 0 length;
+      push_back in_stream @@ get_chunk in_stream;
+
+      set_chunk in_stream (~buffer:in_stream.overlap_buffer, ~offset:0, ~length))
+    else set_chunk in_stream (acquire_chunk in_stream)
 
 let ensure_bytes_at in_stream len =
   ensure_bytes in_stream len;
@@ -214,7 +219,7 @@ let input_string in_stream len =
   Bytes.unsafe_to_string bytes
 
 let input_while ?max p in_stream =
-  let buffer = Buffer.create 0x0f in
+  let buffer = Buffer.create 0xFE in
   let max_len = Option.value max ~default:Int.max_int in
 
   let rec aux count =
