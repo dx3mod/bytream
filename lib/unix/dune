@@ -1,0 +1,4 @@
+(library
+ (name bytream_unix)
+ (public_name bytream.unix)
+ (libraries bytream unix))
