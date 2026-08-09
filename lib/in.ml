@@ -1,9 +1,12 @@
 type t = {
   mutable reader : unit -> chunk;
+  (* Current chunk *)
   mutable buffer : buffer;
   mutable offset : int;  (** Buffer's offset *)
-  mutable length : int;  (** Buffer's length with automatic increase *)
+  mutable length : int;  (** Buffer's length *)
+  (* *)
   mutable total_offset : int;  (** Total read bytes from some source *)
+  (* *)
   overlap_buffer : buffer;
       (** A small buffer to resolve the data gap situation between chunks *)
 }
@@ -37,7 +40,7 @@ let make ?overlap_size reader =
 
 let of_buffer buffer =
   {
-    reader = (fun () -> (~buffer:Bstr.empty, ~offset:0, ~length:0));
+    reader = (fun () -> raise End_of_file);
     buffer;
     offset = 0;
     length = 0;
@@ -214,7 +217,7 @@ let input_string in_stream len =
   Bytes.unsafe_to_string bytes
 
 let input_while ?max p in_stream =
-  let buffer = Buffer.create 0x0f in
+  let buffer = Buffer.create 0xFE in
   let max_len = Option.value max ~default:Int.max_int in
 
   let rec aux count =
