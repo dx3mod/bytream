@@ -1,8 +1,9 @@
 type t = {
-  mutable acquire_chunk : unit -> buffer;
+  mutable reader : unit -> chunk;
   mutable buffer : buffer;
   mutable offset : int;  (** Buffer's offset *)
-  mutable total_offset : int;  (** total read bytes from some source *)
+  mutable length : int;  (** Buffer's length *)
+  mutable total_offset : int;  (** Total read bytes from some source *)
   overlap_buffer : buffer;
       (** A small buffer to resolve the data gap situation between chunks *)
 }
@@ -10,42 +11,52 @@ type t = {
 and buffer =
   (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
+and chunk = buffer:buffer * offset:int * length:int
+
 (* ===================================================================
     CONSTRUCTORS
    =================================================================== *)
 
-let make acquire_chunk =
+let make' ?(overlap_size = 0xFF) reader =
   {
-    acquire_chunk;
+    reader;
     buffer = Bstr.empty;
     offset = 0;
+    length = 0;
     total_offset = 0;
-    overlap_buffer = Bstr.create 0xff;
+    overlap_buffer = Bstr.create overlap_size;
   }
+
+let make ?overlap_size reader =
+  let reader () =
+    let buffer = reader () in
+    (~buffer, ~offset:0, ~length:Bstr.(length buffer))
+  in
+
+  make' ?overlap_size reader
 
 let of_buffer buffer =
   {
-    acquire_chunk = (fun () -> failwith "invalid state");
+    reader = (fun () -> (~buffer:Bstr.empty, ~offset:0, ~length:0));
     buffer;
     offset = 0;
+    length = 0;
     total_offset = 0;
     overlap_buffer = Bstr.empty;
   }
 
 let of_string s = Bstr.of_string s |> of_buffer
 
-let of_channel ?(buffer_size = 4096) ic =
-  let buffer = Bstr.create buffer_size in
+let of_channel ?(io_buffer_size = 4096) ic =
+  let buffer = Bstr.create io_buffer_size in
 
-  let acquire_chunk () =
-    match In_channel.input_bigarray ic buffer 0 buffer_size with
-    | 0 -> Bstr.empty
-    | len ->
-        (* NOTE: performance issue because allocate BA-proxy value more expensive than it can be  *)
-        Bstr.sub buffer ~off:0 ~len
+  let reader () =
+    match In_channel.input_bigarray ic buffer 0 io_buffer_size with
+    | 0 -> raise End_of_file
+    | length -> (~buffer, ~offset:0, ~length)
   in
 
-  make acquire_chunk
+  make' reader
 
 (* ===================================================================
     BUFFER MANIPULATION UTILITY FUNCTIONS
@@ -56,15 +67,19 @@ let[@inline] available_to_read in_stream =
 
 let advance_offset in_stream n =
   in_stream.offset <- in_stream.offset + n;
+  in_stream.length <- in_stream.length - n;
   in_stream.total_offset <- in_stream.total_offset + n
 
-let[@inline] acquire_chunk in_stream = in_stream.acquire_chunk ()
+let[@inline] acquire_chunk in_stream = in_stream.reader ()
 
-let set_chunk in_stream chunk =
-  in_stream.buffer <- chunk;
-  in_stream.offset <- 0
+let set_chunk in_stream ((~buffer, ~offset, ~length) : chunk) =
+  in_stream.buffer <- buffer;
+  in_stream.offset <- offset;
+  in_stream.length <- length
 
-let get_chunk in_stream = Bstr.shift in_stream.buffer in_stream.offset
+let get_chunk in_stream =
+  (~buffer:in_stream.buffer, ~offset:in_stream.offset, ~length:in_stream.length)
+
 let position in_stream = in_stream.total_offset
 
 let rec consume_bytes in_stream len =
@@ -75,7 +90,7 @@ let rec consume_bytes in_stream len =
     advance_offset in_stream available_to_consume;
 
     if available_to_consume < len then begin
-      set_chunk in_stream @@ acquire_chunk in_stream;
+      set_chunk in_stream (acquire_chunk in_stream);
       consume_bytes in_stream (len - available_to_consume)
     end
   end
@@ -92,11 +107,7 @@ let rec gen_input
   let available_bytes = available_to_read in_stream in
 
   if available_bytes = 0 then (
-    let chunk = acquire_chunk in_stream in
-
-    if Bstr.is_empty chunk then raise End_of_file;
-
-    set_chunk in_stream chunk;
+    set_chunk in_stream (acquire_chunk in_stream);
     gen_input ~blit in_stream buffer off len)
   else
     let batched_bytes = min len available_bytes in
@@ -131,20 +142,20 @@ and[@inline] really_input_bytes in_stream bytes off len =
    =================================================================== *)
 
 let push_back in_stream chunk =
-  let acquire_chunk' = in_stream.acquire_chunk in
+  let acquire_chunk' = in_stream.reader in
 
-  in_stream.acquire_chunk <-
+  in_stream.reader <-
     (fun () ->
-      in_stream.acquire_chunk <- acquire_chunk';
+      in_stream.reader <- acquire_chunk';
       chunk)
 
-let ensure_bytes in_stream len =
-  assert (len <= Bstr.length in_stream.overlap_buffer);
+let ensure_bytes in_stream length =
+  (* assert (len <= Bstr.length in_stream.overlap_buffer); *)
+  if available_to_read in_stream < length then begin
+    really_input in_stream in_stream.overlap_buffer 0 length;
 
-  if available_to_read in_stream < len then begin
-    really_input in_stream in_stream.overlap_buffer 0 len;
     push_back in_stream @@ get_chunk in_stream;
-    set_chunk in_stream in_stream.overlap_buffer
+    set_chunk in_stream (~buffer:in_stream.overlap_buffer, ~offset:0, ~length)
   end
 
 let ensure_bytes_at in_stream len =

@@ -19,16 +19,15 @@ That's why `Bytream` was created. It aims to work with binary data and formats i
 You can install the `bytream` library using the [OPAM] package manager or any other method you prefer.
 
 ```console
-# The latest stable version
 $ opam install bytream
-
-# The most recent developer version
-$ opam install bytream.dev https://github.com/dx3mod/bytream
 ```
 
-**For Dune users**
+You can also get the latest version of the upstream (developer) branch.
+```console
+$ opam pin serialport.dev https://github.com/dx3mod/serialport.git
+```
 
-Add `bytream` to a `libraries` stanza in your Dune file, please.
+If you are using [Dune], please add the `bytream` library to your dependencies.
 
 ### In use
 
@@ -36,41 +35,30 @@ Add `bytream` to a `libraries` stanza in your Dune file, please.
 Bytream provides you with two abstractions: one for input (`Bytream.In.t`), and the other for outputting data (`Bytream.Out.t`). Both use [Bigarray] under the hood to represent an array of bytes. The motivation for this choice is to avoid duplication and fix runtime when transferring this data to external functions.
 
 Inheriting ideas from [Bytesrw], Bytream uses the mechanism of chunks to feed the stream.
-
-For demonstrate this concept see an example of how to construct an incoming byte stream from a queue:
+An example illustrates the basic concept of chunking:
 ```ocaml
-let queue = 
-  let queue = Queue.create () in 
+(* Queue as a byte chunk source. *)
+let queue =
+  let queue = Queue.create () in
   Queue.add "he" queue;
   (* ... *)
   Queue.add "d!" queue;
   queue
 in
 
-let in_stream = 
-  Bytream.In.make @@ fun () -> 
-    Queue.take queue |> Bstr.of_string
+(* Reader function that returns chunks of text from the source. *)
+let reader () =
+  match Queue.take_opt queue with
+  | None ->
+    (** For close incoming byte stream, the reader 
+        should raise an End_of_file exception.  *)
+    raise End_of_file
+  | Some chunk -> Bstr.of_string chunk
 in
 
+let in_stream = Bytream.In.make reader in 
 Bytream.In.input_string in_stream 7
 (* - : string = "hello w" *)
-```
-
-and equivalent for outgoing byte stream:
-```ocaml
-let queue = Queue.create () in 
-let out_stream = Bytream.Out.make @@ fun chunk ->
-  Queue.add Bstr.(to_string chunk) queue
-in
-
-Bytream.Out.with_flush out_stream begin fun () -> 
-  Bytream.Out.output_string out_stream "hel";
-  (* ... *)
-  Bytream.Out.output_string out_stream "!\n"
-end;
-
-Queue.iter print_string queue
-(* hello world! *)
 ```
 
 In real cases, we will of course use channels, files, sockets, and other things to communicate with the outside world. And do it streaming.
@@ -110,7 +98,9 @@ Just use it and enjoy yourself without fear. We are always open to pull requests
 
 [Bytesrw]: https://github.com/dbuenzli/bytesrw
 [Rpmfile]: https://github.com/dx3mod/rpmfile
+
 [OPAM]: https://opam.ocaml.org/
+[Dune]: https://dune.build
 
 [Angstrom]: https://github.com/inhabitedtype/angstrom
 [Faraday]: https://github.com/inhabitedtype/faraday

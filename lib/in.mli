@@ -1,53 +1,93 @@
-(** Incoming bytes stream abstraction for processing byte sources on damage.
-
-    {b Decode BSON's [int32] element}
-
-    {[
-    open Bytream
-
-    let input_bson_int32_element in_stream =
-      let ename = In.input_while ((<>) '\0') in_stream in
-      let int32 = In.input_int32_be in_stream in
-
-      Bson.Element (ename, Bson.Int32 int32)
-
-
-    let input_bson_element in_stream =
-      match In.input_byte in_stream with
-      | (* ... *)
-      | 16 -> input_bson_int32_element in_stream
-    ]} *)
+(** Incoming byte stream module for processing byte sources, using chunk buffers
+    when needed, with minimized memory allocations. *)
 
 type t
-(** Incoming byte stream. *)
+(** Incoming byte stream type. *)
 
 and buffer =
   (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
-(** Flatten bytes-oriented [Bigarray] buffer. *)
+(** Flatten bytes-oriented [Bigarray] buffer.
+
+    {b Note}. The rationale for using bytes instead of BA is to transparently
+    transfer memory between the OCaml runtime and external functions, which are
+    necessary for working with input/output. *)
+
+and chunk = buffer:buffer * offset:int * length:int
+(** A byte chunk is a non-empty consecutive range of bytes in a {!buffer} value.
+*)
 
 (** {1 Constructors} *)
 
-val make : (unit -> buffer) -> t
-(** [make acquire_chunk] construct incoming byte stream from reader function.
+val make : ?overlap_size:int -> (unit -> buffer) -> t
+(** [make ?overlap_size reader]
 
-    @param acquire_chunk
-      is a function that reads a chunk from any given source. If the chunk is
-      empty, it is equivalent to {!End_of_file}. *)
+    Construct incoming byte stream from [reader].
+
+    @param reader
+      This is a function that reads chunks from a source. It raises the
+      [End_of_file] exception when the end of the source is reached.
+
+    @param ?overlap_size
+      By default, a buffer of [0xFF] bytes is allocated to resolve data gaps
+      between chunks, which are used to provide linear memory buffers.
+
+    {b Note}. The {!buffer} within a {!chunk} is made available to third parties
+    for a limited period of time during which the chunk is considered valid for
+    reading or writing (or both).
+
+    {b Example}
+
+    This example illustrates the basic concept of chunking.
+
+    {[
+    (* Queue as a byte chunk source. *)
+    let queue =
+      let queue = Queue.create () in
+      Queue.add "he" queue;
+      (* ... *)
+      Queue.add "d!" queue;
+      queue
+    in
+
+    (* Reader function that returns chunks of text from the source. *)
+    let reader () =
+      match Queue.take_opt queue with
+      | None ->
+        (** For close incoming byte stream, the reader
+            should raise an End_of_file exception.  *)
+        raise End_of_file
+      | Some chunk -> Bstr.of_string chunk
+    in
+
+    Bytream.In.make reader
+    ]} *)
+
+val make' : ?overlap_size:int -> (unit -> chunk) -> t
+(** [make_intf ?overlap_size reader]
+
+    Same as the {!make} function, but the [reader] returns {!chunk}s instead of
+    {!buffer}s. *)
 
 val of_buffer : buffer -> t
-(** [of_buffer buffer] construct byte stream from already complete buffer.
+(** [of_buffer buffer]
 
-    {b Note}. An attempt to acquire a new chunk will cause an exception to be
-    thrown. *)
+    Construct a byte stream from a previously prepared buffer. *)
 
 val of_string : string -> t
-(** [of_string string] same as {!of_buffer} but for [string] value.
+(** [of_string string]
 
-    {b Note}. Keep in mind that the string will be copied! *)
+    Same as {!of_buffer}, but for string value.
 
-val of_channel : ?buffer_size:int -> in_channel -> t
-(** [of_channel ?buffer_size ic] construct incoming byte stream from
-    [In_channel] value
+    @param string
+      The [string] will be {b copied} to transform it into the {!buffer} value.
+*)
+
+val of_channel : ?io_buffer_size:int -> in_channel -> t
+(** [of_channel ?io_buffer_size ic]
+
+    Construct an incoming byte stream from [ic] using the
+    [In_channel.input_bigarray] function to get chunks from the source of the
+    channel.
 
     @param ?buffer_size by default is 4096 bytes *)
 
@@ -88,7 +128,7 @@ val really_input : t -> buffer -> int -> int -> unit
 
 val really_input_bytes : t -> bytes -> int -> int -> unit
 (** [really_input_bytes in_stream bytes off len] same as {!really_input} but for
-    {!bytes}. *)
+    [bytes]. *)
 
 (** {2 Substrings inputs} *)
 
