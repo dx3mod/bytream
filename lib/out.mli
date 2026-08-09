@@ -36,9 +36,6 @@ val shift_written_bytes : t -> int -> unit
 (** [shift_written_bytes out_stream] the buffer's offset is shifted by [len]
     bytes to account for written bytes. *)
 
-val flush : t -> unit
-(** [flush out_stream] flush outgoing stream to sink. *)
-
 val writable_guard_bytes_at : t -> int -> int
 (** [writable_guard_bytes_at out_stream len] function guarantees that the buffer
     has enough space to write [len] bytes into it.
@@ -53,6 +50,15 @@ val writable_guard_bytes_at : t -> int -> int
       Out.output_byte out_stream 5;
       Out.output_string out_stream "hello"
     ]} *)
+
+(** {3 Flushing} *)
+
+val flush : t -> unit
+(** [flush out_stream] flush outgoing stream to sink. *)
+
+val with_flush : t -> (unit -> unit) -> unit
+(** [with_flush out_stream f] same as {!section-flush} but with with-function.
+*)
 
 (** {1 Output} *)
 

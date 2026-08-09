@@ -47,8 +47,6 @@ let[@inline] perform_io_output out_stream =
   Bstr.sub ~off:0 ~len:out_stream.written_buffer_bytes out_stream.buffer
   |> perform_io_output_chunk out_stream
 
-let[@inline] flush out_stream = perform_io_output out_stream
-
 let[@inline] writable_guard out_stream =
   if available_to_write out_stream = Bstr.length out_stream.buffer then
     perform_io_output out_stream
@@ -61,6 +59,15 @@ let[@inline] writable_guard_bytes_at out_stream len =
   let offset = out_stream.written_buffer_bytes in
   shift_written_bytes out_stream len;
   offset
+
+(* ===================================================================
+    FLUSHING
+   =================================================================== *)
+
+let[@inline] flush out_stream = perform_io_output out_stream
+
+let[@inline] with_flush out_stream f =
+  Fun.protect ~finally:(fun () -> flush out_stream) f
 
 (* ===================================================================
     WITHING

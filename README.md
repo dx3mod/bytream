@@ -63,11 +63,12 @@ let out_stream = Bytream.Out.make @@ fun chunk ->
   Queue.add Bstr.(to_string chunk) queue
 in
 
-Bytream.Out.output_string out_stream "hel";
-(* ... *)
-Bytream.Out.output_string out_stream "!\n";
+Bytream.Out.with_flush out_stream begin fun () -> 
+  Bytream.Out.output_string out_stream "hel";
+  (* ... *)
+  Bytream.Out.output_string out_stream "!\n"
+end;
 
-Bytream.Out.flush out_stream;
 Queue.iter print_string queue
 (* hello world! *)
 ```
@@ -75,10 +76,24 @@ Queue.iter print_string queue
 In real cases, we will of course use channels, files, sockets, and other things to communicate with the outside world. And do it streaming.
 
 ```ocaml
-let read_cpio_archive ic = 
-  let in_stream = Bytream.of_channel ic in 
-  Cpio.input_archive in_stream
+match request with
+| `Post "/archives/", body_stream ->
+  (* The reader has its own internal buffer mechanism that allows it to bufferize 
+     the contents of the body stream and decode them without copying chunks. *)
+  let reader = Archive_reader.in_stream_of body_stream in
+  let archive_meta =
+    Bytream.In.make Archive_reader.(to_handler reader)
+    |> Archive_reader.input_archive_without_contents 
+  in
+
+  let blob = Archive_reader.blob reader in 
+  process_archive ~meta:archive_meta ~blob ()
+  (* ... *)
 ```
+
+<!-- ## Cookbook
+
+... -->
 
 ## Showcases
 
