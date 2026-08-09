@@ -16,7 +16,7 @@ and chunk = buffer:buffer * offset:int * length:int
 (** A byte chunk is a non-empty consecutive range of bytes in a {!buffer} value.
 *)
 
-(** {1 Incoming byte stream construction} *)
+(** {1 Construction} *)
 
 (** The section explains how you can create a new incoming byte stream. *)
 
@@ -36,6 +36,9 @@ val make : ?overlap_size:int -> (unit -> buffer) -> t
     {b Note}. The {!buffer} within a {!chunk} is made available to third parties
     for a limited period of time during which the chunk is considered valid for
     reading or writing (or both).
+
+    {b See also}, the {!make'} function allows you to return a subview of the
+    {!buffer}.
 
     {b Example}
 
@@ -68,7 +71,15 @@ val make' : ?overlap_size:int -> (unit -> chunk) -> t
 (** [make_intf ?overlap_size reader]
 
     Same as the {!make} function, but the [reader] returns {!chunk}s instead of
-    {!buffer}s. *)
+    {!buffer}s.
+
+    {b Example}
+
+    {[
+    match In_channel.input_bigarray ic buffer 0 io_buffer_size with
+    | (* ... *)
+    | length -> (~buffer, ~offset:0, ~length)
+    ]} *)
 
 val of_buffer : buffer -> t
 (** [of_buffer buffer]
@@ -111,7 +122,7 @@ val of_channel : ?io_buffer_size:int -> in_channel -> t
         |> Tar_reader.input_archive in_stream
     ]} *)
 
-(** {1 Internal buffering mechanism} *)
+(** {1 Buffering mechanism} *)
 
 (** The section explains how to work with incoming byte stream's buffering
     mechanism for effective processing bytes massive.
@@ -193,7 +204,7 @@ val really_input_bytes : t -> bytes -> int -> int -> unit
 (** [really_input_bytes in_stream bytes off len] same as {!really_input} but for
     [bytes]. *)
 
-(** {2 Substrings inputs} *)
+(** {2 Inputting substrings} *)
 
 val input_string : t -> int -> string
 (** [input_string in_stream len]
@@ -213,7 +224,14 @@ val input_while' : max:int -> (char -> bool) -> t -> string
     Same as the {!input_while} function, but consuming remaining bytes until
     [max]. Ideal for input fixed-size C string field some binary formats. *)
 
-(** {2 Integers inputs} *)
+(** {2 Input combinators} *)
+
+val take : int -> t -> (t -> 'a) -> 'a list
+(** [take n in_stream input_value]
+
+    Call [input_value] [n] times and save function's results in list. *)
+
+(** {2 Inputting integer values} *)
 
 (** Input bytes and decode them into integer values. *)
 

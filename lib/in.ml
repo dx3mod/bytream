@@ -179,6 +179,12 @@ let ensure_buffer in_stream len =
   Bstr.sub in_stream.buffer ~off ~len
 
 (* ===================================================================
+    COMBINATORS
+   =================================================================== *)
+
+let take n in_stream input_value = List.init n @@ fun _ -> input_value in_stream
+
+(* ===================================================================
     INPUT INTEGER VALUES
    =================================================================== *)
 
