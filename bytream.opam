@@ -11,7 +11,7 @@ tags: ["bytes" "streaming"]
 homepage: "https://github.com/dx3mod/bytream"
 bug-reports: "https://github.com/dx3mod/bytream/issues"
 depends: [
-  "dune" {>= "3.6"}
+  "dune" {>= "3.15"}
   "ocaml" {>= "5.4.0"}
   "bstr"
   "odoc" {with-doc}
