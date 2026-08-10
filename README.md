@@ -24,7 +24,7 @@ $ opam install bytream
 
 You can also get the latest version of the upstream (developer) branch.
 ```console
-$ opam pin serialport.dev https://github.com/dx3mod/serialport.git
+$ opam pin bytream.dev https://github.com/dx3mod/bytream.git
 ```
 
 If you are using [Dune], please add the `bytream` library to your dependencies.
