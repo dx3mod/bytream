@@ -11,7 +11,7 @@ Features
 
 The library is inspired by projects like [Angstrom] and [Faraday], which address the challenge of analyzing and processing data. However, these projects come with a level of complexity and associated overhead that may not be suitable for smaller, more compact solutions.
 
-That's why `Bytream` was created. It aims to work with binary data and formats in the most efficient way possible, using more transparent and effective methods.
+That's why Bytream was created. It aims to work with binary data and formats in the most efficient way possible, using more transparent and effective methods.
 
 
 ## Quick start
