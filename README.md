@@ -61,6 +61,19 @@ Bytream.In.input_string in_stream 7
 (* - : string = "hello w" *)
 ```
 
+and alternative for outgoing byte stream.
+```ocaml
+(* Queue as a byte chunk sink. *)
+let queue = Queue.create () in
+
+(* Writer function that outputs chunks of text to the sink. *)
+let writer (~buffer, ~length:len, ..) =
+  Queue.add Bstr.(sub_string ~off:0 ~len buffer) queue
+in
+
+Bytream.Out.make writer
+```
+
 In real cases, we will of course use channels, files, sockets, and other things to communicate with the outside world. And do it streaming.
 
 ```ocaml

@@ -10,3 +10,21 @@ module In = struct
 
     Bytream.In.make' reader
 end
+
+module Out = struct
+  let of_file_descr fd =
+    let rec really_write_bigarray buffer offset = function
+      | 0 -> ()
+      | length ->
+          let written_bytes = Unix.write_bigarray fd buffer 0 length in
+
+          really_write_bigarray buffer (offset + written_bytes)
+            (length - written_bytes)
+    in
+
+    let writer ((~buffer, ~length, ..) : Bytream.Out.chunk) =
+      really_write_bigarray buffer 0 length
+    in
+
+    Bytream.Out.make writer
+end

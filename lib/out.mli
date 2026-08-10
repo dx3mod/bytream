@@ -11,7 +11,7 @@ val make : ?buffer_size:int -> (chunk -> unit) -> t
 (** [make ?buffer_size writer]
 
     Construct an outgoing byte stream using the [writer] function to output
-    chunks to a sink.
+    chunks to a bytes sink.
 
     @param writer
       Function that accepting a {!chunk} of {!buffer} that always has an offset
