@@ -1,0 +1,29 @@
+module To_test_of_buffer = struct
+  let test_of_buffer_from_non_empty_buffer () =
+    let in_stream = Bytream.In.of_string "hello!" in
+
+    Alcotest.(check string)
+      "same string" "hello!"
+      (Bytream.In.input_string in_stream 6);
+
+    Alcotest.check_raises "end of the stream" End_of_file (fun () ->
+        Bytream.In.input_char in_stream |> ignore)
+
+  let test_of_buffer_from_empty_buffer () =
+    let in_stream = Bytream.In.of_string "" in
+    Alcotest.check_raises "end of the stream" End_of_file (fun () ->
+        Bytream.In.input_char in_stream |> ignore)
+end
+
+let () =
+  let open Alcotest in
+  run "Bytream.In"
+    [
+      ( "of_buffer",
+        [
+          test_case "From non empty buffer" `Quick
+            To_test_of_buffer.test_of_buffer_from_non_empty_buffer;
+          test_case "From empty buffer" `Quick
+            To_test_of_buffer.test_of_buffer_from_empty_buffer;
+        ] );
+    ]

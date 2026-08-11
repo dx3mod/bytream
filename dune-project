@@ -25,6 +25,7 @@
  (depends
   (ocaml
    (>= 5.4.0))
-  bstr)
+  bstr
+  (alcotest :with-test))
  (tags
   (bytes streaming)))
