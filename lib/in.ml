@@ -43,7 +43,7 @@ let of_buffer buffer =
     reader = (fun () -> raise End_of_file);
     buffer;
     offset = 0;
-    length = 0;
+    length = Bstr.length buffer;
     total_offset = 0;
     overlap_buffer = Bstr.empty;
   }
