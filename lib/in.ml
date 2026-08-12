@@ -152,22 +152,24 @@ let push_back in_stream chunk =
       in_stream.reader <- acquire_chunk';
       chunk)
 
-let ensure_bytes in_stream length =
+let[@inline] ensure_bytes in_stream length =
   (* assert (length <= Bstr.length in_stream.overlap_buffer); *)
-  let available_bytes = available_to_read in_stream in
-
-  if available_bytes < length then
+  let aux in_stream available_bytes length =
     if available_bytes <> 0 then (
       really_input in_stream in_stream.overlap_buffer 0 length;
       push_back in_stream @@ get_chunk in_stream;
 
       set_chunk in_stream (~buffer:in_stream.overlap_buffer, ~offset:0, ~length))
     else set_chunk in_stream (acquire_chunk in_stream)
+  in
 
-let ensure_bytes_at in_stream len =
-  ensure_bytes in_stream len;
+  let available_bytes = (available_to_read [@inlined]) in_stream in
+  if available_bytes < length then aux in_stream available_bytes length
+
+let[@inline] ensure_bytes_at in_stream len =
+  (ensure_bytes [@inlined]) in_stream len;
   let offset = in_stream.offset in
-  advance_offset in_stream len;
+  (advance_offset [@inlined]) in_stream len;
   offset
 
 let ensure_chunk in_stream length =
@@ -196,7 +198,7 @@ let with_size f in_stream =
    =================================================================== *)
 
 let[@inline] gen_get in_stream f n =
-  let off = ensure_bytes_at in_stream n in
+  let off = (ensure_bytes_at [@inlined]) in_stream n in
   f in_stream.buffer off
 
 let[@inline] input_char in_stream = gen_get in_stream Bstr.get 1
@@ -228,30 +230,52 @@ let[@inline] input_int64_le in_stream = gen_get in_stream Bstr.get_int64_le 4
 
 let input_string in_stream len =
   let bytes = Bytes.create len in
-  really_input_bytes in_stream bytes 0 len;
+  (really_input_bytes [@inlined]) in_stream bytes 0 len;
   Bytes.unsafe_to_string bytes
 
-let input_while ?max p in_stream =
-  let buffer = Buffer.create 0xFE in
-  let max_len = Option.value max ~default:Int.max_int in
-
+let input_while_into_buffer ~max_len p in_stream buffer =
   let rec aux count =
-    if count < max_len then
-      let ch = input_char in_stream in
+    if count <= max_len then begin
+      (ensure_bytes [@inlined]) in_stream 1;
+      let ch = Bstr.get in_stream.buffer in_stream.offset in
 
       if p ch then begin
+        (advance_offset [@inlined]) in_stream 1;
         Buffer.add_char buffer ch;
         aux (succ count)
       end
+    end
   in
 
-  aux 0;
+  aux 0
 
-  Buffer.contents buffer
+let input_while ?(max_len = Int.max_int) p in_stream =
+  let[@inline] input_while_buffered max_len p in_stream =
+    let[@local] buffer =
+      Buffer.create (if max_len <> Int.max_int then max_len else 60)
+    in
 
-let input_while' ~max p in_stream =
-  let string = input_while ~max p in_stream in
-  consume_bytes in_stream (max - String.length string);
+    input_while_into_buffer ~max_len p in_stream buffer;
+    Buffer.contents buffer
+  in
+
+  let rec try_count_in_buffer max_len p in_stream length =
+    let remaining_bytes_in_buffer = available_to_read in_stream - length in
+
+    if remaining_bytes_in_buffer > 0 then begin
+      let ch = Bstr.get in_stream.buffer (in_stream.offset + length) in
+      if length <= max_len && p ch then
+        try_count_in_buffer max_len p in_stream (succ length)
+      else input_string in_stream length
+    end
+    else (input_while_buffered [@inlined]) max_len p in_stream
+  in
+
+  try_count_in_buffer max_len p in_stream 0
+
+let input_while' ~max_len p in_stream =
+  let string = input_while ~max_len p in_stream in
+  consume_bytes in_stream (max_len - String.length string);
   string
 
 (* ===================================================================

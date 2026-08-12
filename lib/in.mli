@@ -140,15 +140,33 @@ val ensure_buffer : t -> int -> buffer
 
     @raise End_of_file if the [in_stream] was ended
 
-    {b See}. {!ensure_chunk} function that have most fast allocation. *)
+    {b See}. {!ensure_chunk} function that have most fast allocation.
+
+    {b Example}
+
+    {[
+    let buffer = Bytream.In.ensure_chunk in_stream 8 in
+
+    let field_a = Bstr.get_int32_be buffer 0
+    and field_b = Bstr.get_int32_be buffer 4 in
+    (* ... *)
+    ]} *)
 
 val ensure_chunk : t -> int -> chunk
 (** [ensure_chunk in_stream len]
 
-    Same as the {!make} function, but returns {!chunk}.
+    Same as the {!ensure_buffer} function, but returns a {!chunk} that has the
+    fastest allocation.
 
-    {b Note}. Maybe be most performance than {!ensure_buffer} because {!buffer}
-    subbing is more expressive. Recommended to use. *)
+    {b Example}
+
+    {[
+    let ~buffer, ~offset, .. = Bytream.In.ensure_chunk in_stream 8 in
+
+    let field_a = Bstr.get_int32_be buffer offset
+    and field_b = Bstr.get_int32_be buffer (offset+4) in
+    (* ... *)
+    ]} *)
 
 val position : t -> int
 (** [position in_stream]
@@ -201,15 +219,31 @@ val input_string : t -> int -> string
 
     Input [len]-sized bytes value from incoming byte stream. *)
 
-val input_while : ?max:int -> (char -> bool) -> t -> string
-(** [input_while ?max p in_stream]
+(** {3 Inputting while} *)
 
-    Input byte while [p] on the byte returns [true].
+val input_while_into_buffer :
+  max_len:int -> (char -> bool) -> t -> Buffer.t -> unit
+(** [input_while_into_buffer ~max_len p in_stream buffer]
 
-    @param ?max determined the maximum length of the input string *)
+    Input bytes and fill into [buffer] while [p] on the byte returns [true].
 
-val input_while' : max:int -> (char -> bool) -> t -> string
-(** [input_while ~max p in_stream]
+    {b Example}
+    {[
+    let buffer = Buffer.create 0xFE and max_len = Int.max_int in
+    Bytream.In.input_while_into_buffer ~max_len is_digit in_stream buffer
+    ]} *)
+
+val input_while : ?max_len:int -> (char -> bool) -> t -> string
+(** [input_while  ?max_len p in_stream]
+
+    Input bytes while [p] on the byte returns [true].
+
+    @param ?max
+      determined the maximum length of the input string, by default is
+      [Int.max_int] *)
+
+val input_while' : max_len:int -> (char -> bool) -> t -> string
+(** [input_while ~max_len p in_stream]
 
     Same as the {!input_while} function, but consuming remaining bytes until
     [max]. Ideal for input fixed-size C string field some binary formats. *)
