@@ -248,6 +248,11 @@ val input_while' : max_len:int -> (char -> bool) -> t -> string
     Same as the {!input_while} function, but consuming remaining bytes until
     [max]. Ideal for input fixed-size C string field some binary formats. *)
 
+(** {2 Inputting lines} *)
+
+val input_line : t -> string
+(** [input_line in_stream] *)
+
 (** {2 Input combinators} *)
 
 val take : int -> (t -> 'a) -> t -> 'a list
@@ -268,6 +273,9 @@ val with_size : (t -> 'a) -> t -> 'a * int
     let section, section_size = Bytream.In.with_size input_section in_stream in
     (* ... *)
     ]} *)
+
+val many : (t -> 'a) -> t -> 'a list
+(** [many input_value in_stream] *)
 
 (** {2 Inputting integer values} *)
 

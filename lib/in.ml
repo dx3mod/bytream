@@ -193,6 +193,11 @@ let with_size f in_stream =
 
   (result, off' - off)
 
+let[@tail_mod_cons] rec many input_value in_stream =
+  match input_value in_stream with
+  | exception End_of_file -> []
+  | value -> value :: many input_value in_stream
+
 (* ===================================================================
     INPUT INTEGER VALUES
    =================================================================== *)
@@ -287,6 +292,13 @@ let input_while' ~max_len p in_stream =
   let string = input_while ~max_len p in_stream in
   consume_bytes in_stream (max_len - String.length string);
   string
+
+let input_line in_stream =
+  let string = input_while (( <> ) '\n') in_stream in
+  match input_char in_stream with
+  | exception End_of_file when "" = string -> raise End_of_file
+  | (exception End_of_file) | '\n' -> string
+  | _ -> failwith "impossible state of input_line"
 
 (* ===================================================================
     TRANSFORMING

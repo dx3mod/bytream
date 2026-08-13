@@ -15,6 +15,18 @@ module To_test_of_buffer = struct
         Bytream.In.input_char in_stream |> ignore)
 end
 
+module To_test_inputting_lines = struct
+  let test_input_line () =
+    let in_stream =
+      Bytream.In.of_string "first line\nsecond line\nfinal line"
+    in
+
+    Alcotest.(check (list string))
+      "same strings"
+      [ "first line"; "second line"; "final line" ]
+      Bytream.In.(many input_line in_stream)
+end
+
 let () =
   let open Alcotest in
   run "Bytream.In"
@@ -25,5 +37,9 @@ let () =
             To_test_of_buffer.test_of_buffer_from_non_empty_buffer;
           test_case "From empty buffer" `Quick
             To_test_of_buffer.test_of_buffer_from_empty_buffer;
+        ] );
+      ( "input_line",
+        [
+          test_case "Many lines" `Quick To_test_inputting_lines.test_input_line;
         ] );
     ]
