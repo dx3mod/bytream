@@ -235,19 +235,28 @@ let input_string in_stream len =
 
 let input_while_into_buffer ~max_len p in_stream buffer =
   let rec aux count =
-    if count <= max_len then begin
-      (ensure_bytes [@inlined]) in_stream 1;
-      let ch = Bstr.get in_stream.buffer in_stream.offset in
+    try
+      if count <= max_len then begin
+        (ensure_bytes [@inlined]) in_stream 1;
+        let ch = Bstr.get in_stream.buffer in_stream.offset in
 
-      if p ch then begin
-        (advance_offset [@inlined]) in_stream 1;
-        Buffer.add_char buffer ch;
-        aux (succ count)
+        if p ch then begin
+          (advance_offset [@inlined]) in_stream 1;
+          Buffer.add_char buffer ch;
+          aux (succ count)
+        end
       end
-    end
+    with _ -> ()
   in
 
   aux 0
+
+let check_on_end_of_file in_steam =
+  try
+    let new_chunk = acquire_chunk in_steam in
+    push_back in_steam new_chunk;
+    false
+  with End_of_file -> true
 
 let input_while ?(max_len = Int.max_int) p in_stream =
   let[@inline] input_while_buffered max_len p in_stream =
@@ -268,6 +277,7 @@ let input_while ?(max_len = Int.max_int) p in_stream =
         try_count_in_buffer max_len p in_stream (succ length)
       else input_string in_stream length
     end
+    else if check_on_end_of_file in_stream then input_string in_stream length
     else (input_while_buffered [@inlined]) max_len p in_stream
   in
 
