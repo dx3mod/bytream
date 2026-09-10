@@ -121,22 +121,24 @@ val of_channel : ?io_buffer_size:int -> in_channel -> t
     {!chunk}s gotten from [reader]. The stream use it until not be gotten new
     chunk when it be needed. *)
 
-val available_to_read : t -> int
-(** [available_to_read in_stream]
+val bytes_available : t -> int
+(** [bytes_available in_stream]
 
-    @return remaining bytes of current chunk that available to read. *)
+    Reports how many bytes of data are currently available in the incoming byte
+    stream's buffer for reading. *)
 
 val consume_bytes : t -> int -> unit
 (** [consume_bytes in_stream len]
 
-    Consume [len] bytes from incoming bytes stream with offset shifting.
+    Consume [len] bytes from the incoming byte stream with offset shifting.
 
     @raise End_of_file if you try consume more bytes than a source provide. *)
 
 val ensure_buffer : t -> int -> buffer
 (** [ensure_chunk in_stream len]
 
-    @return {!buffer} value that guarantee have [len] bytes.
+    Return a {!buffer} view that guarantees [len] bytes with the offset of [len]
+    bytes.
 
     @raise End_of_file if the [in_stream] was ended
 
@@ -145,7 +147,7 @@ val ensure_buffer : t -> int -> buffer
     {b Example}
 
     {[
-    let buffer = Bytream.In.ensure_chunk in_stream 8 in
+    let buffer = Bytream.In.ensure_buffer in_stream 8 in
 
     let field_a = Bstr.get_int32_be buffer 0
     and field_b = Bstr.get_int32_be buffer 4 in
@@ -168,10 +170,10 @@ val ensure_chunk : t -> int -> chunk
     (* ... *)
     ]} *)
 
-val position : t -> int
-(** [position in_stream]
+val bytes_received : t -> int
+(** [bytes_received in_stream]
 
-    @return Total bytes number read from incoming byte stream. *)
+    Returns how many bytes were received from the incoming byte stream. *)
 
 (** {1 Input} *)
 

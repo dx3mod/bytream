@@ -56,13 +56,13 @@ val with_into_string : (t -> unit) -> string
 
 (** {1 Buffering mechanism} *)
 
-val available_to_write : t -> int
-(** [available_to_write out_stream]
+val bytes_available : t -> int
+(** [bytes_available out_stream]
 
-    @return Number of bytes that have not been written to the internal buffer.
+    Returns a number of bytes that have not been written to the internal buffer.
 *)
 
-(* exception Shifted_beyond_buffer *)
+exception Shifted_beyond_buffer
 
 val shift : t -> int -> unit
 (** [shift out_stream n]

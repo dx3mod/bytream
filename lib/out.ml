@@ -30,7 +30,9 @@ let of_channel ?io_buffer_size oc =
     INTERNALS BUFFER MANIPULATION
    =================================================================== *)
 
-let[@inline] available_to_write { buffer; written_buffer_bytes; _ } =
+exception Shifted_beyond_buffer
+
+let[@inline] bytes_available { buffer; written_buffer_bytes; _ } =
   Bstr.length buffer - written_buffer_bytes
 
 let shift out_stream len =
@@ -52,13 +54,13 @@ let[@inline] perform_io_output out_stream =
   |> perform_io_output_chunk out_stream
 
 let[@inline] writable_guard out_stream =
-  if available_to_write out_stream = Bstr.length out_stream.buffer then
+  if bytes_available out_stream = Bstr.length out_stream.buffer then
     perform_io_output out_stream
 
 let ensure_writable_bytes out_stream len =
   assert (len <= Bstr.length out_stream.buffer);
 
-  if available_to_write out_stream < len then perform_io_output out_stream
+  if bytes_available out_stream < len then perform_io_output out_stream
 
 let[@inline] ensure_writable_bytes_at out_stream len =
   ensure_writable_bytes out_stream len;
@@ -106,7 +108,7 @@ let[@inline] rec gen_output
   if len <> 0 then begin
     writable_guard out_stream;
 
-    let available_space = available_to_write out_stream in
+    let available_space = bytes_available out_stream in
     let batched_bytes = min available_space buffer_length in
 
     blit buffer ~src_off:off out_stream.buffer

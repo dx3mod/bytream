@@ -65,7 +65,7 @@ let of_channel ?(io_buffer_size = 4096) ic =
     BUFFER MANIPULATION UTILITY FUNCTIONS
    =================================================================== *)
 
-let[@inline] available_to_read in_stream = in_stream.length
+let[@inline] bytes_available in_stream = in_stream.length
 
 let advance_offset in_stream n =
   (* assert (in_stream.length - n >= 0); *)
@@ -83,11 +83,11 @@ let set_chunk in_stream ((~buffer, ~offset, ~length) : chunk) =
 let get_chunk in_stream =
   (~buffer:in_stream.buffer, ~offset:in_stream.offset, ~length:in_stream.length)
 
-let[@inline] position in_stream = in_stream.total_offset
+let[@inline] bytes_received in_stream = in_stream.total_offset
 
 let rec consume_bytes in_stream len =
   if len <> 0 then begin
-    let available_bytes = available_to_read in_stream in
+    let available_bytes = bytes_available in_stream in
     let available_to_consume = min available_bytes len in
 
     advance_offset in_stream available_to_consume;
@@ -107,7 +107,7 @@ let gen_input
     in_stream buffer off len =
   assert (len > 0);
 
-  let available_bytes = available_to_read in_stream in
+  let available_bytes = bytes_available in_stream in
 
   if available_bytes = 0 then begin
     set_chunk in_stream (acquire_chunk in_stream)
@@ -163,7 +163,7 @@ let[@inline] ensure_bytes in_stream length =
     else set_chunk in_stream (acquire_chunk in_stream)
   in
 
-  let available_bytes = (available_to_read [@inlined]) in_stream in
+  let available_bytes = (bytes_available [@inlined]) in_stream in
   if available_bytes < length then aux in_stream available_bytes length
 
 let[@inline] ensure_bytes_at in_stream len =
@@ -187,9 +187,9 @@ let ensure_buffer in_stream len =
 let take n input_value in_stream = List.init n @@ fun _ -> input_value in_stream
 
 let with_size f in_stream =
-  let off = position in_stream in
+  let off = bytes_received in_stream in
   let result = f in_stream in
-  let off' = position in_stream in
+  let off' = bytes_received in_stream in
 
   (result, off' - off)
 
@@ -274,7 +274,7 @@ let input_while ?(max_len = Int.max_int) p in_stream =
   in
 
   let rec try_count_in_buffer max_len p in_stream length =
-    let remaining_bytes_in_buffer = available_to_read in_stream - length in
+    let remaining_bytes_in_buffer = bytes_available in_stream - length in
 
     if remaining_bytes_in_buffer > 0 then begin
       let ch = Bstr.get in_stream.buffer (in_stream.offset + length) in
