@@ -1,5 +1,5 @@
 module In = struct
-  let of_file_descr ?(io_buffer_size = 4096) fd =
+  let of_fd ?(io_buffer_size = 4096) fd =
     let buffer = Bstr.create io_buffer_size in
 
     let reader () =
@@ -12,7 +12,7 @@ module In = struct
 end
 
 module Out = struct
-  let of_file_descr fd =
+  let of_fd fd =
     let rec really_write_bigarray buffer offset = function
       | 0 -> ()
       | length ->
