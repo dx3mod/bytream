@@ -31,7 +31,6 @@ If you are using [Dune], please add the `bytream` library to your dependencies.
 
 ### In use
 
-
 Bytream provides you with two abstractions: one for input (`Bytream.In.t`), and the other for outputting data (`Bytream.Out.t`). Both use [Bigarray] under the hood to represent an array of bytes. The motivation for this choice is to avoid duplication and fix runtime when transferring this data to external functions.
 
 Inheriting ideas from [Bytesrw], Bytream uses the mechanism of chunks to feed the stream.
@@ -77,31 +76,77 @@ Bytream.Out.make writer
 In real cases, we will of course use channels, files, sockets, and other things to communicate with the outside world. And do it streaming.
 
 ```ocaml
-match request with
-| `Post "/archives/", body_stream ->
-  (* The reader has its own internal buffer mechanism that allows it to bufferize 
-     the contents of the body stream and decode them without copying chunks. *)
-  let reader = Archive_reader.in_stream_of body_stream in
-  let archive_meta =
-    Bytream.In.make Archive_reader.(to_handler reader)
-    |> Archive_reader.input_archive_without_contents 
-  in
-
-  let blob = Archive_reader.blob reader in 
-  process_archive ~meta:archive_meta ~blob ()
+let in_stream = Bytream.In.of_channel ic in 
+(* for Unix.file_descr *)
+let in_stream = Bytream_unix.In.of_fd fd in
+(* or for Lwt... *)
+let%lwt _ =
+  let%lwt in_stream in Bytream_lwt.of_channel ic in
   (* ... *)
 ```
 
-<!-- ## Cookbook
+A bytream function looks similar to the channels API from OCaml.
 
-... -->
+```ocaml
+let input_greeting_opt in_stream = 
+  match In.input_string in_stream 7 with 
+  | "Hello, " -> 
+    let name = In.input_while ((<>) '!') in_stream in 
+    assert (In.input_char in_stream = '!');
+    Some name
+  | _ -> None
+```
+
+For more details, see [API references](https://ocaml.org/p/bytream/latest/doc/index.html).
+
+
+## Guidelines
+
+This section describes some recommendations and idiomatic approaches for writing good code using the Bytream library.
+
+### Naming
+
+**Streams naming**. Use the `in_stream` name for incoming bytes stream (`ByteStream.In.t`) and the `out_stream` name to outgoing bytes stream (`BytesStream.Out.t`).
+
+**Processing streams function naming**. Use the `input_` prefix for functions that work with incoming byte streams, and the `output_` prefix to functions that work on outgoing byte streams.
+
+**End-user function naming**. Use the `from_` prefix for functions that read from and decode data from some source (e.g. `Tar_archive.from_channel`). Use the `into_` prefix for functions that encode data and write it to some sink.
+
+**Short aliases for modules.** Use `module In = Bytream.In` or `module Out = Bytream.Out` in your code.
+
+### Effective decoding of a stream
+
+You can use typical input functions, but their sequential use can make performance less efficient than it could be.
+
+Not actually effective:
+```ocaml
+let input_packet in_stream = 
+  let version = input_version in_stream in 
+  (* ... *)
+  let checksum = input_checksum in_stream in 
+```
+
+**Use** `ensure_` functions and manual, or like bin libraries, to unpack raw bytes into OCaml values.
+
+```ocaml
+let input_packet in_stream =
+  let ~buffer, ~offset, .. = In.ensure_chunk in_stream 12 in
+  let version = Bstr.get_int32_be buffer offset in
+  (* ... *)
+  let checksum = Bstr.get_uint8 buffer (offset + 11) in
+```
+
+## Additionals
+
+The library provides you with extra modules with useful features, such as compressors, support for different input/output runtimes and others.
+
+Additionals: `bytream.unix`, `bytream.lwt`.
 
 ## Showcases
 
 You can explore ecosystem libraries that use Bytream to better understand its applicability.
 
 * [Rpmfile] is the library for reading and writing RPM packages has been ported from [Angstrom] since version 1.0.0;
-
 
 ## License
 
