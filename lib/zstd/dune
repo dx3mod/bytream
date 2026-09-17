@@ -1,0 +1,4 @@
+(library
+ (name bytream_zstd)
+ (public_name bytream.zstd)
+ (libraries bytream ozstd))

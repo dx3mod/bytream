@@ -73,6 +73,9 @@ let advance_offset in_stream n =
   in_stream.length <- in_stream.length - n;
   in_stream.total_offset <- in_stream.total_offset + n
 
+let[@inline] advance_offset_on_chunk in_stream ((~length, ..) : chunk) =
+  advance_offset in_stream length
+
 let[@inline] acquire_chunk in_stream = in_stream.reader ()
 
 let set_chunk in_stream ((~buffer, ~offset, ~length) : chunk) =
@@ -82,6 +85,18 @@ let set_chunk in_stream ((~buffer, ~offset, ~length) : chunk) =
 
 let get_chunk in_stream =
   (~buffer:in_stream.buffer, ~offset:in_stream.offset, ~length:in_stream.length)
+
+let input_chunk in_stream =
+  match bytes_available in_stream with
+  | 0 ->
+      let chunk = acquire_chunk in_stream in
+      set_chunk in_stream chunk;
+      advance_offset_on_chunk in_stream chunk;
+      chunk
+  | _ ->
+      let chunk = get_chunk in_stream in
+      advance_offset_on_chunk in_stream chunk;
+      chunk
 
 let[@inline] bytes_received in_stream = in_stream.total_offset
 

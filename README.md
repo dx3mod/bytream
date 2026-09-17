@@ -140,7 +140,7 @@ let input_packet in_stream =
 
 The library provides you with extra modules with useful features, such as compressors, support for different input/output runtimes and others.
 
-Additionals: `bytream.unix`, `bytream.lwt`.
+Additionals: `bytream.unix`, `bytream.lwt`, `bytream.zstd`.
 
 ## Showcases
 

@@ -214,6 +214,11 @@ val really_input_bytes : t -> bytes -> int -> int -> unit
 (** [really_input_bytes in_stream bytes off len] same as {!really_input} but for
     [bytes]. *)
 
+val input_chunk : t -> chunk
+(** [input_chunk in_stream]
+
+    Input the [chunk] from the incoming byte stream. *)
+
 (** {2 Inputting substrings} *)
 
 val input_string : t -> int -> string
