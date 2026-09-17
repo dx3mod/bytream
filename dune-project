@@ -2,8 +2,6 @@
 
 (name bytream)
 
-(version 0.3)
-
 (generate_opam_files true)
 
 (source
@@ -27,5 +25,6 @@
    (>= 5.4.0))
   bstr
   (alcotest :with-test))
+ (depopts ozstd lwt)
  (tags
   (bytes streaming)))

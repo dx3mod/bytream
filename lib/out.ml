@@ -125,7 +125,7 @@ let gen_really_output ~blit ~buffer_length out_stream buffer off len =
   perform_io_output out_stream
 
 let[@inline] output out_stream buffer off len =
-  (* If the buffer is equal to or greater than our internal buffer, 
+  (* If the buffer is equal to or greater than our internal buffer,
      then we can directly output it to the sink without worrying about copying. *)
   if Bstr.length out_stream.buffer <= len then
     (~buffer, ~offset:off, ~length:len) |> perform_io_output_chunk out_stream
@@ -143,6 +143,10 @@ let output_string out_stream s =
   let length = String.length s in
   gen_output ~blit:Bstr.blit_from_string ~buffer_length:length out_stream s 0
     length
+
+let output_chunk out_stream chunk =
+  if out_stream.written_buffer_bytes > 0 then perform_io_output out_stream
+  else perform_io_output_chunk out_stream chunk
 
 (* ===================================================================
     OUTPUTTING INTEGER VALUES

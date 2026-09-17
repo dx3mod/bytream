@@ -1,0 +1,6 @@
+(library
+ (name bytream_ozstd)
+ (public_name bytream.ozstd)
+ (enabled_if %{lib-available:ozstd})
+ (optional)
+ (libraries bytream ozstd))

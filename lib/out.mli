@@ -111,7 +111,12 @@ val output_string : t -> string -> unit
 val really_output : t -> buffer -> int -> int -> unit
 (** [output out_stream buffer off len]
 
-    Output the [buffer] into outgoing byte stream with {i flushing}. *)
+    Output the [buffer] into the outgoing byte stream with {i flushing}. *)
+
+val output_chunk : t -> chunk -> unit
+(** [output_chunk out_stream chunk]
+
+    Output the [chunk] to the outgoing byte stream with {i flushing}. *)
 
 (** {3 Integer values outputting} *)
 

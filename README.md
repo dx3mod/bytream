@@ -13,7 +13,6 @@ The library is inspired by projects like [Angstrom] and [Faraday], which address
 
 That's why Bytream was created. It aims to work with binary data and formats in the most efficient way possible, using more transparent and effective methods.
 
-
 ## Quick start
 
 You can install the `bytream` library using the [OPAM] package manager or any other method you prefer.
@@ -136,11 +135,11 @@ let input_packet in_stream =
   let checksum = Bstr.get_uint8 buffer (offset + 11) in
 ```
 
-## Additionals
+## Additions
 
-The library provides you with extra modules with useful features, such as compressors, support for different input/output runtimes and others.
+The library provides you with extra modules (and packages) with useful features, such as compression/decompression streams, supports for different input/output runtimes and others.
 
-Additionals: `bytream.unix`, `bytream.lwt`.
+Additions: `bytream.unix`, `bytream.lwt`, `bytream.ozstd`.
 
 ## Showcases
 

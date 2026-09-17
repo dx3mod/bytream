@@ -2,4 +2,5 @@
  (name bytream_lwt)
  (public_name bytream.lwt)
  (enabled_if %{lib-available:lwt_direct})
+ (optional)
  (libraries bytream lwt.unix lwt_direct))
