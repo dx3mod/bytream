@@ -23,6 +23,10 @@ val to_string : (t -> unit) -> string
 
 (** {2 Buffering mechanism} *)
 
+val buffer_size : t -> int
+(** [buffer_size out_stream] returns the number of the size of the internal
+    buffer. *)
+
 exception Shifted_beyond_buffer
 
 val bytes_available : t -> int
@@ -36,9 +40,9 @@ val ensure_bytes : t -> int -> unit
 (** [ensure_bytes out_stream len] ensures the [len] bytes of the internal buffer
     length. *)
 
-val ensure_bytes_at : t -> int -> int
+val ensure_slice : t -> int -> Slice_bstr.t
 (** [ensure_bytes_at out_stream len] is similar to the {!ensure_bytes} function,
-    but it automatically advances and returns an internal buffer offset. *)
+    but it automatically advances and returns an slice. *)
 
 val flush : t -> unit
 (** [flush out_stream] flushes the outgoing byte stream. *)

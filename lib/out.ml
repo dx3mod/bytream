@@ -27,6 +27,7 @@ let of_channel ?(io_buffer_size = Sys.io_buffer_size) oc =
 
 exception Shifted_beyond_buffer
 
+let buffer_size { buf; _ } = Bstr.length buf
 let[@inline] write_slice out_stream slice = out_stream.writer slice
 let[@inline] bytes_available { buf; off; _ } = Bstr.length buf - off
 
@@ -65,11 +66,11 @@ let[@inline] unsafe_ensure_bytes_at out_stream len =
   shift out_stream len;
   offset
 
-let ensure_bytes_at out_stream len =
+let ensure_slice out_stream len =
   ensure_bytes out_stream len;
-  let offset = out_stream.off in
+  let off = out_stream.off in
   shift out_stream len;
-  offset
+  Slice_bstr.make ~off out_stream.buf
 
 (* ===================================================================
     FLUSHING
