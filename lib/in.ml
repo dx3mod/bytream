@@ -40,7 +40,7 @@ let of_bigstring buf =
 
 let of_string s = Bstr.of_string s |> of_bigstring
 
-let of_channel ?(io_buffer_size = Sys.io_buffer_size) ic =
+let of_channel ?(io_buffer_size = 4096) ic =
   let buffer = Bstr.create io_buffer_size in
 
   let reader () =

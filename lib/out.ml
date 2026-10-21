@@ -17,7 +17,7 @@ let make ?buf writer =
     written_total_bytes = 0;
   }
 
-let of_channel ?(io_buffer_size = Sys.io_buffer_size) oc =
+let of_channel ?(io_buffer_size = 4096) oc =
   make ~buf:(Bstr.create io_buffer_size) @@ fun Slice.{ buf; len; off } ->
   Out_channel.output_bigarray oc buf off len
 

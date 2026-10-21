@@ -27,7 +27,7 @@ module In = struct
 end
 
 module Out = struct
-  let of_channel ?(io_buffer_size = Sys.io_buffer_size) oc =
+  let of_channel ?(io_buffer_size = 4096) oc =
     let writer slice =
       Lwt_direct.spawn_in_the_background @@ fun () ->
       Lwt_direct.await
