@@ -91,9 +91,11 @@ let to_buffer ?buf buffer f =
   in
 
   let writer (slice : Slice_bstr.t) =
-    let len = min (Bytes.length buf_bytes) slice.len in
-    Slice_bstr.blit_to_bytes ~dst_off:0 ~len slice buf_bytes;
-    Buffer.add_subbytes buffer buf_bytes 0 len
+    if slice.len <= Bytes.length buf_bytes then begin
+      Slice_bstr.blit_to_bytes ~dst_off:0 ~len:slice.len slice buf_bytes;
+      Buffer.add_subbytes buffer buf_bytes 0 slice.len
+    end
+    else Slice_bstr.to_string slice |> Buffer.add_string buffer
   in
 
   let out_stream = make writer in
@@ -220,3 +222,7 @@ let output_int64_le out_stream int =
 
 let output_int64_ne out_stream int =
   gen_output_val out_stream Bstr.set_int64_ne 8 int
+
+let transform out_stream f =
+  let write = out_stream.writer in
+  { out_stream with writer = (fun slice -> f slice |> write) }

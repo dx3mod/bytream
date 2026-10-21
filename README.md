@@ -90,47 +90,47 @@ let input_greeting_opt in_stream =
 For more details, see [API references](https://ocaml.org/p/bytream/latest/doc/index.html).
 
 
-## Guidelines
-
-This section describes some recommendations and idiomatic approaches for writing good code using the Bytream library.
-
-### Naming
-
-**Streams naming**. Use the `in_stream` name for incoming bytes stream (`ByteStream.In.t`) and the `out_stream` name to outgoing bytes stream (`BytesStream.Out.t`).
-
-**Processing streams function naming**. Use the `input_` prefix for functions that work with incoming byte streams, and the `output_` prefix to functions that work on outgoing byte streams.
-
-**End-user function naming**. Use the `from_` prefix for functions that read from and decode data from some source (e.g. `Tar_archive.from_channel`). Use the `into_` prefix for functions that encode data and write it to some sink.
-
-**Short aliases for modules.** Use `module In = Bytream.In` or `module Out = Bytream.Out` in your code.
-
-### Effective decoding of a stream
-
-You can use typical input functions, but their sequential use can make performance less efficient than it could be.
-
-Not actually effective:
-```ocaml
-let input_packet in_stream = 
-  let version = input_version in_stream in 
-  (* ... *)
-  let checksum = input_checksum in_stream in 
-```
-
-**Use** `ensure_` functions and manual, or like bin libraries, to unpack raw bytes into OCaml values.
-
-```ocaml
-let input_packet in_stream =
-  let Slice.{ buf; off; _ } = In.ensure_slice in_stream 12 in
-  let version = Bstr.get_int32_be buffer offset in
-  (* ... *)
-  let checksum = Bstr.get_uint8 buffer (offset + 11) in
-```
-
 ## Additions
 
 The library provides you with extra modules (and packages) with useful features, such as compression/decompression streams, supports for different input/output runtimes and others.
 
 Additions: `bytream.unix`, `bytream.lwt`, `bytream.ozstd`, `bytream.bin`.
+
+### Binary encoder and decoders
+
+[Bin] is a small library for encoding and decoding information from a buffer (like bytes or bigstrings). You can use it to encode and decode Bytream streams.
+
+```ocaml
+#require "bytream.bin";;
+
+type point = { x : int; y : int }
+
+let point = 
+  let open Bin in 
+  record (fun x y -> { x; y })
+  |+ field neint16 (fun t -> t.x)
+  |+ field neint16 (fun t -> t.y)
+  |> sealr
+
+let _ = 
+  (* ... *)
+  let p = Bytream_bin.In.input in_stream point in 
+  Bytream_bin.Out.output out_stream { point with y = 100 }
+```
+
+### Zstandard compression and decompression 
+
+```ocaml
+#require "bytream.ozstd";;
+
+let output_compressed_string out_stream = 
+  let out_stream = Bytream_ozstd.Out.make ~compression_level:3 out_stream in 
+  Bytream.Out.output_string out_stream "Cras pulvinar sollicitudin nulla quis tempor.";
+
+let input_decompressed_line in_stream = 
+  let in_stream = Bytream_ozstd.In.make in_stream in 
+  Bytream.In.input_line in_stream
+```
 
 ## Showcases
 
@@ -155,3 +155,4 @@ Just use it and enjoy yourself without fear. We are always open to pull requests
 
 [Bigarray]: https://ocaml.org/manual/5.5/api/Bigarray.html
 [slice]: https://ocaml.org/p/slice/latest
+[Bin]: https://ocaml.org/p/bin/latest

@@ -1,5 +1,5 @@
 module In = struct
-  let of_stream ?dictionary ?size_limit in_stream =
+  let make ?dictionary ?size_limit in_stream =
     let state =
       Ozstd.Decompressor.create ?dictionary ?size_limit ()
       |> Ozstd.Decompressor.Stream.make |> Ozstd.Decompressor.State.make
@@ -13,18 +13,12 @@ module In = struct
 end
 
 module Out = struct
-  let of_stream ?dictionary ?compression_level out_stream =
+  let make ?dictionary ?compression_level out_stream =
     let state =
       Ozstd.Compressor.create ?compression_level ?dictionary ()
       |> Ozstd.Compressor.Stream.make |> Ozstd.Compressor.State.make
     in
 
-    let writer slice =
-      let slice = Ozstd.Compressor.State.feed state slice `Flush in
-
-      if not (Slice_bstr.is_empty slice) then
-        Bytream.Out.output_slice out_stream slice
-    in
-
-    Bytream.Out.make writer
+    let f slice = Ozstd.Compressor.State.feed state slice `Flush in
+    Bytream.Out.transform out_stream f
 end

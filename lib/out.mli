@@ -91,3 +91,9 @@ val output_int32_ne : t -> int32 -> unit
 val output_int64_be : t -> int64 -> unit
 val output_int64_le : t -> int64 -> unit
 val output_int64_ne : t -> int64 -> unit
+
+(** {2 Stream transforming} *)
+
+val transform : t -> (Slice_bstr.t -> Slice_bstr.t) -> t
+(** [transform out_stream f] transforms the outgoing stream output via [f]
+    functions. *)
