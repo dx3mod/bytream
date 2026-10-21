@@ -13,10 +13,11 @@ depends: [
   "dune" {>= "3.15"}
   "ocaml" {>= "4.14"}
   "bstr"
+  "slice" {>= "0.1.0"}
   "alcotest" {with-test}
   "odoc" {with-doc}
 ]
-depopts: ["ozstd" "lwt"]
+depopts: ["ozstd" "lwt" "bin"]
 build: [
   ["dune" "subst"] {dev}
   [

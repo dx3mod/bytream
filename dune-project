@@ -24,7 +24,9 @@
   (ocaml
    (>= 4.14))
   bstr
+  (slice
+   (>= 0.1.0))
   (alcotest :with-test))
- (depopts ozstd lwt)
+ (depopts ozstd lwt bin)
  (tags
   (bytes streaming)))
