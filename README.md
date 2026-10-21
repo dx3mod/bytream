@@ -5,7 +5,7 @@ A streaming bytes and crunching them library.
 This library contains angostic I/O runtime mechanisms for organization byte streams processing for write and read in an efficient manner, e.g. for buildings codecs and protocol implementations.
 
 Features
-* Byte-oriented processing of I/O via slice-based abstraction inspired by the [Bytesrw] library
+* Byte-oriented processing of I/O via [slice]-based abstraction inspired by the [Bytesrw] library
 * Gigabytes throughput with less memory allocation using fixed buffers and reuse exists
 * Channels-like APIs make it possible to write natural OCaml code in a direct style
 
@@ -15,22 +15,11 @@ That's why Bytream was created. It aims to work with binary data and formats in 
 
 ## Quick start
 
-You can install the `bytream` library using the [OPAM] package manager or any other method you prefer.
-
-```console
-$ opam install bytream
-```
-
-You can also get the latest version of the upstream (developer) branch.
-```console
-$ opam pin bytream.dev https://github.com/dx3mod/bytream.git
-```
-
-If you are using [Dune], please add the `bytream` library to your dependencies.
+You can install the `bytream` library using the [OPAM] package manager or any other method you prefer. If you are using [Dune], please add the `bytream` library to your dependencies.
 
 ### In use
 
-Bytream provides you with two abstractions: one for input (`Bytream.In.t`), and the other for outputting data (`Bytream.Out.t`). Both use [Bigarray] under the hood to represent an array of bytes. The motivation for this choice is to avoid duplication and fix runtime when transferring this data to external functions.
+Bytream provides you with two abstractions: one for input (`Bytream.In.t`), and the other for output data (`Bytream.Out.t`). Both use [Bigarray] under the hood to represent an array of bytes. The motivation for this choice is to avoid duplication and fix runtime when transferring this data to external functions.
 
 Inheriting ideas from [Bytesrw], Bytream uses the mechanism of chunks to feed the stream.
 An example illustrates the basic concept of chunking:
@@ -49,9 +38,9 @@ let reader () =
   match Queue.take_opt queue with
   | None ->
     (** For close incoming byte stream, the reader 
-        should raise an End_of_file exception.  *)
+        should raise an End_of_file exception. *)
     raise End_of_file
-  | Some chunk -> Bstr.of_string chunk
+  | Some chunk -> Slice_bstr.of_string chunk
 in
 
 let in_stream = Bytream.In.make reader in 
@@ -65,8 +54,8 @@ and alternative for outgoing byte stream.
 let queue = Queue.create () in
 
 (* Writer function that outputs chunks of text to the sink. *)
-let writer (~buffer, ~length:len, ..) =
-  Queue.add Bstr.(sub_string ~off:0 ~len buffer) queue
+let writer slice =
+  Queue.add Slice_bstr.(to_string slice) queue
 in
 
 Bytream.Out.make writer
@@ -87,6 +76,8 @@ let%lwt _ =
 A bytream function looks similar to the channels API from OCaml.
 
 ```ocaml
+module In = Bytream.In
+
 let input_greeting_opt in_stream = 
   match In.input_string in_stream 7 with 
   | "Hello, " -> 
@@ -129,7 +120,7 @@ let input_packet in_stream =
 
 ```ocaml
 let input_packet in_stream =
-  let ~buffer, ~offset, .. = In.ensure_chunk in_stream 12 in
+  let Slice.{ buf; off; _ } = In.ensure_slice in_stream 12 in
   let version = Bstr.get_int32_be buffer offset in
   (* ... *)
   let checksum = Bstr.get_uint8 buffer (offset + 11) in
@@ -163,3 +154,4 @@ Just use it and enjoy yourself without fear. We are always open to pull requests
 [Faraday]: https://github.com/inhabitedtype/faraday
 
 [Bigarray]: https://ocaml.org/manual/5.5/api/Bigarray.html
+[slice]: https://ocaml.org/p/slice/latest

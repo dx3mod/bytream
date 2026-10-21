@@ -1,30 +1,25 @@
 type t = {
-  output_chunk : chunk -> unit;
-  buffer : buffer;
-  mutable written_buffer_bytes : int;
+  writer : Slice_bstr.t -> unit;
+  buf : Bstr.t;
+  mutable off : int;
   mutable written_total_bytes : int;
 }
-
-and buffer =
-  (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
-
-and chunk = buffer:buffer * offset:int * length:int
 
 (* ===================================================================
     CONSTRUCTORS
    =================================================================== *)
 
-let make ?(buffer_size = 4096) output_chunk =
+let make ?buf writer =
   {
-    output_chunk;
-    buffer = Bstr.create buffer_size;
-    written_buffer_bytes = 0;
+    writer;
+    buf = (match buf with None -> Bstr.create 4096 | Some buf -> buf);
+    off = 0;
     written_total_bytes = 0;
   }
 
-let of_channel ?io_buffer_size oc =
-  make ?buffer_size:io_buffer_size @@ fun (~buffer, ~length, ..) ->
-  Out_channel.output_bigarray oc buffer 0 length
+let of_channel ?(io_buffer_size = Sys.io_buffer_size) oc =
+  make ~buf:(Bstr.create io_buffer_size) @@ fun Slice.{ buf; len; off } ->
+  Out_channel.output_bigarray oc buf off len
 
 (* ===================================================================
     INTERNALS BUFFER MANIPULATION
@@ -32,39 +27,47 @@ let of_channel ?io_buffer_size oc =
 
 exception Shifted_beyond_buffer
 
-let[@inline] bytes_available { buffer; written_buffer_bytes; _ } =
-  Bstr.length buffer - written_buffer_bytes
+let[@inline] write_slice out_stream slice = out_stream.writer slice
+let[@inline] bytes_available { buf; off; _ } = Bstr.length buf - off
 
 let shift out_stream len =
-  let shifted_written_bytes = out_stream.written_buffer_bytes + len in
+  let shifted_written_bytes = out_stream.off + len in
 
-  if Bstr.length out_stream.buffer >= shifted_written_bytes then (
-    out_stream.written_buffer_bytes <- shifted_written_bytes;
+  if Bstr.length out_stream.buf >= shifted_written_bytes then (
+    out_stream.off <- shifted_written_bytes;
     out_stream.written_total_bytes <- out_stream.written_total_bytes + len)
   else
     let exception Shifted_beyond_buffer in
     raise Shifted_beyond_buffer
 
-let perform_io_output_chunk out_stream chunk =
-  out_stream.written_buffer_bytes <- 0;
-  out_stream.output_chunk chunk
+let perform_output_slice out_stream slice =
+  out_stream.off <- 0;
+  write_slice out_stream slice
 
-let[@inline] perform_io_output out_stream =
-  (~buffer:out_stream.buffer, ~offset:0, ~length:out_stream.written_buffer_bytes)
-  |> perform_io_output_chunk out_stream
+let[@inline] perform_output out_stream =
+  Slice_bstr.make ~len:out_stream.off out_stream.buf
+  |> perform_output_slice out_stream
 
 let[@inline] writable_guard out_stream =
-  if bytes_available out_stream = Bstr.length out_stream.buffer then
-    perform_io_output out_stream
+  if bytes_available out_stream = Bstr.length out_stream.buf then
+    perform_output out_stream
 
-let ensure_writable_bytes out_stream len =
-  assert (len <= Bstr.length out_stream.buffer);
+let unsafe_ensure_bytes out_stream len =
+  if bytes_available out_stream < len then perform_output out_stream
 
-  if bytes_available out_stream < len then perform_io_output out_stream
+let ensure_bytes out_stream len =
+  assert (len <= Bstr.length out_stream.buf);
+  unsafe_ensure_bytes out_stream len
 
-let[@inline] ensure_writable_bytes_at out_stream len =
-  ensure_writable_bytes out_stream len;
-  let offset = out_stream.written_buffer_bytes in
+let[@inline] unsafe_ensure_bytes_at out_stream len =
+  unsafe_ensure_bytes out_stream len;
+  let offset = out_stream.off in
+  shift out_stream len;
+  offset
+
+let ensure_bytes_at out_stream len =
+  ensure_bytes out_stream len;
+  let offset = out_stream.off in
   shift out_stream len;
   offset
 
@@ -72,7 +75,7 @@ let[@inline] ensure_writable_bytes_at out_stream len =
     FLUSHING
    =================================================================== *)
 
-let[@inline] flush out_stream = perform_io_output out_stream
+let[@inline] flush out_stream = perform_output out_stream
 
 let[@inline] with_flush out_stream f =
   Fun.protect ~finally:(fun () -> flush out_stream) f
@@ -81,21 +84,28 @@ let[@inline] with_flush out_stream f =
     WITHING
    =================================================================== *)
 
-let with_into_buffer buffer f =
-  let out_stream =
-    make @@ fun (~buffer:chunk_buffer, ~length:len, ..) ->
-    Bstr.sub_string ~off:0 ~len chunk_buffer |> Buffer.add_string buffer
+let to_buffer ?buf buffer f =
+  let buf_bytes =
+    match buf with None -> Bytes.create 1024 | Some buf -> buf
   in
 
+  let writer (slice : Slice_bstr.t) =
+    let len = min (Bytes.length buf_bytes) slice.len in
+    Slice_bstr.blit_to_bytes ~dst_off:0 ~len slice buf_bytes;
+    Buffer.add_subbytes buffer buf_bytes 0 len
+  in
+
+  let out_stream = make writer in
+
   Fun.protect
-    ~finally:(fun () -> perform_io_output out_stream)
+    ~finally:(fun () -> perform_output out_stream)
     (fun () -> f out_stream);
 
   ()
 
-let with_into_string f =
-  let buffer = Buffer.create 0xFF in
-  with_into_buffer buffer f;
+let to_string f =
+  let buffer = Buffer.create 4096 in
+  to_buffer buffer f;
   Buffer.contents buffer
 
 (* ===================================================================
@@ -111,8 +121,8 @@ let[@inline] rec gen_output
     let available_space = bytes_available out_stream in
     let batched_bytes = min available_space buffer_length in
 
-    blit buffer ~src_off:off out_stream.buffer
-      ~dst_off:out_stream.written_buffer_bytes ~len:batched_bytes;
+    blit buffer ~src_off:off out_stream.buf ~dst_off:out_stream.off
+      ~len:batched_bytes;
 
     shift out_stream batched_bytes;
 
@@ -122,17 +132,17 @@ let[@inline] rec gen_output
 
 let gen_really_output ~blit ~buffer_length out_stream buffer off len =
   gen_output ~blit ~buffer_length out_stream buffer off len;
-  perform_io_output out_stream
+  perform_output out_stream
 
-let[@inline] output out_stream buffer off len =
+let[@inline] output out_stream buf off len =
   (* If the buffer is equal to or greater than our internal buffer,
      then we can directly output it to the sink without worrying about copying. *)
-  if Bstr.length out_stream.buffer <= len then
-    (~buffer, ~offset:off, ~length:len) |> perform_io_output_chunk out_stream
+  if Bstr.length out_stream.buf <= len then
+    perform_output_slice out_stream Slice_bstr.(make ~off ~len buf)
   else
     (gen_output [@inlined]) ~blit:Bstr.blit
-      ~buffer_length:Bstr.(length buffer)
-      out_stream buffer off len
+      ~buffer_length:Bstr.(length buf)
+      out_stream buf off len
 
 let[@inline] really_output out_stream buffer off len =
   gen_really_output ~blit:Bstr.blit
@@ -144,17 +154,27 @@ let output_string out_stream s =
   gen_output ~blit:Bstr.blit_from_string ~buffer_length:length out_stream s 0
     length
 
-let output_chunk out_stream chunk =
-  if out_stream.written_buffer_bytes > 0 then perform_io_output out_stream
-  else perform_io_output_chunk out_stream chunk
+let rec output_slice out_stream slice =
+  if bytes_available out_stream > slice.Slice.len then
+    Bstr.blit ~src_off:slice.off slice.buf ~dst_off:out_stream.off
+      out_stream.buf ~len:slice.len
+  else (
+    perform_output out_stream;
+
+    if Bstr.length out_stream.buf >= slice.Slice.len then
+      write_slice out_stream slice
+    else output_slice out_stream slice)
+
+(* if out_stream.written_buffer_bytes > 0 then perform_output out_stream;
+  perform_output_slice out_stream slice *)
 
 (* ===================================================================
     OUTPUTTING INTEGER VALUES
    =================================================================== *)
 
 let[@inline] gen_output_val out_stream f len value =
-  let off = ensure_writable_bytes_at out_stream len in
-  f out_stream.buffer off value
+  let off = unsafe_ensure_bytes_at out_stream len in
+  f out_stream.buf off value
 
 let output_char out_stream ch = gen_output_val out_stream Bstr.set 1 ch
 

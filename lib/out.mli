@@ -1,124 +1,75 @@
-(** Outgoing bytes stream module for streaming bytes to a sink in chunks. *)
+(** Outgoing byte stream. *)
 
 type t
-(** Outgoing byte stream type. *)
+(** The type for outgoing byte stream. *)
 
-include module type of Buffer_types_intf
-
-(** {1 Construction} *)
-
-val make : ?buffer_size:int -> (chunk -> unit) -> t
-(** [make ?buffer_size writer]
-
-    Construct an outgoing byte stream using the [writer] function to output
-    chunks to a bytes sink.
-
-    @param writer
-      Function that accepting a {!chunk} of {!buffer} that always has an offset
-      of zero and a variable length. Therefore, for you, it is enough to match
-      only the [buffer] and [length] fields.
-      {[
-      let writer (~buffer, ~length, ..) = (* ... *)
-      ]}
-
-    @param ?buffer_size by default is 4096 bytes
-
-    {b Example}
-
-    This example illustrates the basic concept of chunking.
-
-    {[
-    (* Queue as a byte chunk sink. *)
-    let queue = Queue.create () in
-
-    (* Writer function that outputs chunks of text to the sink. *)
-    let writer (~buffer, ~length:len, ..) =
-      Queue.add Bstr.(sub_string ~off:0 ~len buffer) queue
-    in
-
-    Bytream.Out.make writer
-    ]} *)
+val make : ?buf:Bstr.t -> (Slice_bstr.t -> unit) -> t
+(** [make ?buf writer] creates an outgoing byte stream from [writer] with an
+    internal [buf] buffer. *)
 
 val of_channel : ?io_buffer_size:int -> out_channel -> t
-(** [of_channel ?io_buffer_size oc] make an outgoing stream from the [channel].
+(** [of_channel ?io_buffer_size oc] creates an outgoing byte stream by writing
+    into the output channel. *)
 
-    {b Note}. You can disable internal buffering for the channels to get the
-    expected behavior: [Out_channel.set_buffered oc false v]. *)
+val to_buffer : ?buf:bytes -> Buffer.t -> (t -> unit) -> unit
+(** [to_buffer ?buf buffer f] creates an outgoing byte stream to the [buffer],
+    which is filled by the [f] function.
 
-(** {3 Withing into} *)
+    The [buf] parameter defines the internal temporal buffer for copying between
+    the outgoing byte stream and the buffer. *)
 
-val with_into_buffer : Buffer.t -> (t -> unit) -> unit
-(** [with_into_string f] make a stream that outgoing to buffer. *)
+val to_string : (t -> unit) -> string
+(** [to_string f] is similar to {!to_buffer} function but returns an string. *)
 
-val with_into_string : (t -> unit) -> string
-(** [with_into_string f] make a stream that outgoing to buffer and returns
-    [string] value. *)
-
-(** {1 Buffering mechanism} *)
-
-val bytes_available : t -> int
-(** [bytes_available out_stream]
-
-    Returns a number of bytes that have not been written to the internal buffer.
-*)
+(** {2 Buffering mechanism} *)
 
 exception Shifted_beyond_buffer
 
+val bytes_available : t -> int
+(** [bytes_available out_stream] returns the number of bytes available to write
+    into the internal buffer. *)
+
 val shift : t -> int -> unit
-(** [shift out_stream n]
+(** [shift out_stream n] shifts the internal buffer offset on [n] bytes. *)
 
-    Shift the {!buffer}'s offset by [n] bytes to account for the written bytes.
+val ensure_bytes : t -> int -> unit
+(** [ensure_bytes out_stream len] ensures the [len] bytes of the internal buffer
+    length. *)
 
-    @raise Shifted_beyond_buffer if [n] is more than available space to write *)
-
-val ensure_writable_bytes_at : t -> int -> int
-(** [writable_guard_bytes_at out_stream len]
-
-    Guarantees that the {!buffer} has enough space to write [len] bytes into it.
-
-    @return the buffer's offset
-
-    {b Example}
-
-    {[
-    let write_hello_record out_stream hello =
-      let off = Out.writable_guard_bytes_at out_stream 6 in
-      Out.output_byte out_stream 5;
-      Out.output_string out_stream "hello"
-    ]} *)
-
-(** {3 Flushing} *)
+val ensure_bytes_at : t -> int -> int
+(** [ensure_bytes_at out_stream len] is similar to the {!ensure_bytes} function,
+    but it automatically advances and returns an internal buffer offset. *)
 
 val flush : t -> unit
-(** [flush out_stream] flush outgoing stream to sink. *)
+(** [flush out_stream] flushes the outgoing byte stream. *)
 
-val with_flush : t -> (unit -> unit) -> unit
-(** [with_flush out_stream f] same as {!section-flush} but with with-function.
-*)
+val with_flush : t -> (unit -> 'a) -> 'a
+(** [with_flush out_stream f] automatic flushes the outgoing byte stream after
+    call the [f] function. *)
 
-(** {1 Output} *)
+(** {2 Outputs} *)
 
-val output : t -> buffer -> int -> int -> unit
-(** [output out_stream buffer off len]
+(** {3 Outputs into buffers} *)
 
-    Output the [buffer] into outgoing byte stream. *)
+val output : t -> Bstr.t -> int -> int -> unit
+(** [output out_stream buf off len] outputs the [len] bytes from the [buffer]
+    into the outgoing byte stream. *)
+
+val really_output : t -> Bstr.t -> int -> int -> unit
+(** [output out_stream buf off len] outputs the [len] bytes from the [buffer]
+    into the outgoing byte stream with {i flushing}.
+
+    See also {!output} function. *)
 
 val output_string : t -> string -> unit
-(** [output out_stream string]
+(** [output_string out_stream s] outputs the [s] string into the outgoing byte
+    stream. *)
 
-    Output the [string] into outgoing byte stream. *)
+val output_slice : t -> Slice_bstr.t -> unit
+(** [output_string out_stream s] outputs the [slice] into the outgoing byte
+    stream. *)
 
-val really_output : t -> buffer -> int -> int -> unit
-(** [output out_stream buffer off len]
-
-    Output the [buffer] into the outgoing byte stream with {i flushing}. *)
-
-val output_chunk : t -> chunk -> unit
-(** [output_chunk out_stream chunk]
-
-    Output the [chunk] to the outgoing byte stream with {i flushing}. *)
-
-(** {3 Integer values outputting} *)
+(** {3 Outputs integer values} *)
 
 val output_char : t -> char -> unit
 val output_byte : t -> int -> unit

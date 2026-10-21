@@ -1,278 +1,160 @@
-(** Incoming byte stream module for processing byte sources, using chunk buffers
-    when needed, with minimized memory allocations. *)
+(** Incoming byte stream. *)
 
 type t
-(** Incoming byte stream type. *)
+(** The type for incoming byte stream. *)
 
-include module type of Buffer_types_intf
-
-(** {1 Construction} *)
-
-(** The section explains how you can create a new incoming byte stream. *)
-
-val make : ?overlap_size:int -> (unit -> buffer) -> t
-(** [make ?overlap_size reader]
-
-    Construct incoming byte stream from [reader].
+val make : ?overlap_buffer:Bstr.t -> (unit -> Slice_bstr.t) -> t
+(** [make ?overlap_buffer reader] creates an incoming byte stream from the
+    [reader] with the [overlap_buffer].
 
     @param reader
-      This is a function that reads chunks from a source. It raises the
-      [End_of_file] exception when the end of the source is reached.
+      Slices reader from any source. It raises the [End_of_file] exception when
+      the end of the source is reached.
 
-    @param ?overlap_size
-      By default, a buffer of [0xFF] bytes is allocated to resolve data gaps
-      between chunks, which are used to provide linear memory buffers.
+    @param overlap_buffer
+      Buffer to resolve data gaps between slices, which are used to provide
+      linear memory buffers. By default, it is allocated with 0xFF bytes size.
 
-    {b Note}. The {!buffer} within a {!chunk} is made available to third parties
-    for a limited period of time during which the chunk is considered valid for
-    reading or writing (or both).
+    {b Note}. The buffer within a slice is made available to third parties for a
+    limited period of time during which the chunk is considered valid for
+    reading or writing (or both). *)
 
-    {b See also}, the {!make'} function allows you to return a subview of the
-    {!buffer}.
+val with_overlap_buffer : t -> Bstr.t -> t
+(** [with_overlap_buffer in_stream overlap_buffer] recreates the [in_stream]
+    with [overlap_buffer] buffer. *)
 
-    {b Example}
-
-    This example illustrates the basic concept of chunking.
-
-    {[
-    (* Queue as a byte chunk source. *)
-    let queue =
-      let queue = Queue.create () in
-      Queue.add "he" queue;
-      (* ... *)
-      Queue.add "d!" queue;
-      queue
-    in
-
-    (* Reader function that returns chunks of text from the source. *)
-    let reader () =
-      match Queue.take_opt queue with
-      | None ->
-        (** For close incoming byte stream, the reader
-            should raise an End_of_file exception.  *)
-        raise End_of_file
-      | Some chunk -> Bstr.of_string chunk
-    in
-
-    Bytream.In.make reader
-    ]} *)
-
-val make' : ?overlap_size:int -> (unit -> chunk) -> t
-(** [make_intf ?overlap_size reader]
-
-    Same as the {!make} function, but the [reader] returns {!chunk}s instead of
-    {!buffer}s.
-
-    {b Example}
-
-    {[
-    match In_channel.input_bigarray ic buffer 0 io_buffer_size with
-    | (* ... *)
-    | length -> (~buffer, ~offset:0, ~length)
-    ]} *)
-
-val of_buffer : buffer -> t
-(** [of_buffer buffer]
-
-    Construct a byte stream from a previously prepared buffer.
-
-    {b Example}
-
-    {[
-    let buffer = mmap_file "bigfile.iso" in
-    let in_stream = Bytream.In.of_buffer buffer in
-    (* ... *)
-    ]} *)
+val of_bigstring : Bstr.t -> t
+(** [of_bigstring buffer] creates an incoming byte stream from an already
+    allocated [buffer]. *)
 
 val of_string : string -> t
-(** [of_string string]
-
-    Same as {!of_buffer}, but for string value.
-
-    @param string
-      The [string] will be {b copied} to transform it into the {!buffer} value.
-*)
+(** [of_string source] creates an incoming byte stream from a copy of [source]
+    string. *)
 
 val of_channel : ?io_buffer_size:int -> in_channel -> t
-(** [of_channel ?io_buffer_size ic]
+(** [of_channel ?io_buffer_size ic] creates an incoming byte stream by reading
+    from the input channel. *)
 
-    Construct an incoming byte stream from [ic] using the
-    [In_channel.input_bigarray] function to get chunks from the source of the
-    channel.
-
-    @param ?buffer_size by default is 4096 bytes
-
-    {b Example pattern for your modules}
-
-    {[
-    module Tar_archive = struct
-      (* ... *)
-      let of_channel ic =
-        Bytream.In.of_channel ic
-        |> Tar_reader.input_archive in_stream
-    ]} *)
-
-(** {1 Buffering mechanism} *)
+(** {2 Buffering mechanism} *)
 
 (** The section explains how to work with incoming byte stream's buffering
     mechanism for effective processing bytes massive.
 
-    You should understand, an incoming byte stream not copying incoming
-    {!chunk}s gotten from [reader]. The stream use it until not be gotten new
-    chunk when it be needed. *)
-
-val bytes_available : t -> int
-(** [bytes_available in_stream]
-
-    Reports how many bytes of data are currently available in the incoming byte
-    stream's buffer for reading. *)
-
-val consume_bytes : t -> int -> unit
-(** [consume_bytes in_stream len]
-
-    Consume [len] bytes from the incoming byte stream with offset shifting.
-
-    @raise End_of_file if you try consume more bytes than a source provide. *)
-
-val ensure_buffer : t -> int -> buffer
-(** [ensure_chunk in_stream len]
-
-    Return a {!buffer} view that guarantees [len] bytes with the offset of [len]
-    bytes.
-
-    @raise End_of_file if the [in_stream] was ended
-
-    {b See}. {!ensure_chunk} function that have most fast allocation.
-
-    {b Example}
-
-    {[
-    let buffer = Bytream.In.ensure_buffer in_stream 8 in
-
-    let field_a = Bstr.get_int32_be buffer 0
-    and field_b = Bstr.get_int32_be buffer 4 in
-    (* ... *)
-    ]} *)
-
-val ensure_chunk : t -> int -> chunk
-(** [ensure_chunk in_stream len]
-
-    Same as the {!ensure_buffer} function, but returns a {!chunk} that has the
-    fastest allocation.
-
-    {b Example}
-
-    {[
-    let ~buffer, ~offset, .. = Bytream.In.ensure_chunk in_stream 8 in
-
-    let field_a = Bstr.get_int32_be buffer offset
-    and field_b = Bstr.get_int32_be buffer (offset+4) in
-    (* ... *)
-    ]} *)
+    You should understand, an incoming byte stream not copying incoming slices
+    gotten from [reader]. The stream use it until not be gotten new slice when
+    it be needed. *)
 
 val bytes_received : t -> int
-(** [bytes_received in_stream]
+(** [bytes_received in_stream] returns the total number of bytes received from
+    the reader. *)
 
-    Returns how many bytes were received from the incoming byte stream. *)
+val bytes_available : t -> int
+(** [bytes_available in_stream] returns the number of remaining bytes to read
+    from the internal buffer. *)
 
-(** {1 Input} *)
+val peek_slice : t -> Slice_bstr.t
+(** [peek_slice in_stream] returns the internal buffer state. *)
 
-val input : t -> buffer -> int -> int -> int
-(** [input in_stream buffer off len]
+val consume_bytes : t -> int -> unit
+(** [consume_bytes in_stream n] consumes the [n] bytes from the incoming byte
+    stream. *)
 
-    Input streams's bytes into [buffer] and return actually batched bytes.
-    Similar to [Stdlib.input] channel's function.
+val advance_offset : t -> int -> unit
+(** [advance_offset in_stream offset] advances the internal buffer offset.
 
-    {b Note}. Try use [ensure_] functions instead it for escape unnecessary
+    See also {!consume_bytes} function. *)
+
+(** {3 Ensure necessary buffer length} *)
+
+val ensure_bytes : t -> int -> unit
+(** [ensure_bytes in_stream len] ensures the [len] bytes of the internal buffer
+    length.
+
+    @param len
+      The number must be equal to or less than the internal overlap buffer
+      length.
+
+    @raise End_of_file if the [in_stream] was ended *)
+
+val ensure_slice : t -> int -> Slice_bstr.t
+(** [ensure_slice in_stream len] is similar to the {!ensure_bytes} function, but
+    it automatically advances and returns a slice of the ensured length. *)
+
+val ensure_buffer : t -> int -> Bstr.t
+(** [ensure_buffer in_stream len] is similar to the {!ensure_bytes} function,
+    but it automatically advances and returns a buffer of the ensured length. *)
+
+(** {2 Inputs} *)
+
+(** {3 Inputs into buffers} *)
+
+val input_slice : t -> Slice_bstr.t
+(** [input_slice in_stream] inputs all available bytes of the internal buffer.
+
+    @raise End_of_file if the [in_stream] was ended *)
+
+val input : t -> Bstr.t -> int -> int -> int
+(** [input in_stream buf off len] inputs the [len] bytes from the incoming byte
+    stream into the [buf] buffer, and returns actually batched bytes.
+
+    Similar to [In_channel.input] function.
+
+    {b Note}. Use [ensure_] functions instead it for escape unnecessary
     allocations.
 
-    @param off The is [buffer]'s offset.
-    @param len The is [buffer]'s length.
+    @raise End_of_file if the [in_stream] was ended *)
+
+val really_input : t -> Bstr.t -> int -> int -> unit
+(** [really_input in_stream buf off len] inputs the [len] bytes from the
+    incoming byte stream into the [buf] buffer with grantees fill it.
 
     @raise End_of_file if the [in_stream] was ended *)
 
 val input_bytes : t -> bytes -> int -> int -> int
-(** [input_bytes in_stream bytes off len] s
-
-    Same as the {!section-input} function, but working with [bytes] value. *)
-
-val really_input : t -> buffer -> int -> int -> unit
-(** [really_input in_stream buffer off len] input streams's bytes into [buffer]
-    and grantees fill it.
-
-    {b Example}
-
-    {[
-    let input_request in_stream =
-      (* ... *)
-      Bytream.In.really_input in_stream payload_buffer 0 payload_size
-    ]}
-
-    @raise End_of_file if [in_stream] not have enough bytes for input *)
+(** [input_bytes in_stream buf off len] is similar to {!input} function but for
+    [bytes] type. *)
 
 val really_input_bytes : t -> bytes -> int -> int -> unit
-(** [really_input_bytes in_stream bytes off len] same as {!really_input} but for
-    [bytes]. *)
+(** [really_input_bytes in_stream buf off len] is similar to {!really_input}
+    function but for [bytes] type. *)
 
-val input_chunk : t -> chunk
-(** [input_chunk in_stream]
-
-    Input the [chunk] from the incoming byte stream. *)
-
-(** {2 Inputting substrings} *)
+(** {3 Inputs into strings} *)
 
 val input_string : t -> int -> string
-(** [input_string in_stream len]
+(** [input_string in_stream len] inputs a string of [len] bytes length from the
+    incoming byte stream.
 
-    Input [len]-sized bytes value from incoming byte stream. *)
+    @raise End_of_file if the [in_stream] was ended *)
 
-(** {3 Inputting while} *)
+val input_line : t -> string option
+(** [input_string in_stream len] inputs a line from the incoming byte stream. *)
+
+(** {3 Inputs while} *)
 
 val input_while_into_buffer :
   max_len:int -> (char -> bool) -> t -> Buffer.t -> unit
-(** [input_while_into_buffer ~max_len p in_stream buffer]
-
-    Input bytes and fill into [buffer] while [p] on the byte returns [true].
-
-    {b Example}
-    {[
-    let buffer = Buffer.create 0xFE and max_len = Int.max_int in
-    Bytream.In.input_while_into_buffer ~max_len is_digit in_stream buffer
-    ]} *)
+(** [input_while_into_buffer ?max_len p in_stream buffer] inputs to the [buffer]
+    while the [p] returns [true]. *)
 
 val input_while : ?max_len:int -> (char -> bool) -> t -> string
-(** [input_while  ?max_len p in_stream]
-
-    Input bytes while [p] on the byte returns [true].
-
-    @param ?max
-      determined the maximum length of the input string, by default is
-      [Int.max_int] *)
+(** [input_while ?max_len predicate in_stream] is similar to
+    {!input_while_into_buffer} function but returns a string as result. *)
 
 val input_while' : max_len:int -> (char -> bool) -> t -> string
-(** [input_while ~max_len p in_stream]
+(** [input_while ~max_len predicate in_stream] is similar to {!input_while}
+    function but consuming remaining bytes until [max]. Ideal for input
+    fixed-size C string field some binary formats. *)
 
-    Same as the {!input_while} function, but consuming remaining bytes until
-    [max]. Ideal for input fixed-size C string field some binary formats. *)
-
-(** {2 Inputting lines} *)
-
-val input_line : t -> string
-(** [input_line in_stream] *)
-
-(** {2 Input combinators} *)
+(** {3 Input combinators} *)
 
 val take : int -> (t -> 'a) -> t -> 'a list
-(** [take n input_value in_stream]
+(** [take n input in_stream] calls [input] [n]-times and returns result list.
 
-    Call [input_value] [n]-times and save the function's results in a list. *)
+    @raise End_of_file if the [in_stream] was ended *)
 
 val with_size : (t -> 'a) -> t -> 'a * int
-(** [with_size f in_stream]
-
-    @return (value, size)
-
-    A value and a number of bytes were inputted by the [f] function.
+(** [with_size input in_stream] returns the number of bytes that were input by
+    the [input] function.
 
     {b Example}
 
@@ -281,57 +163,24 @@ val with_size : (t -> 'a) -> t -> 'a * int
     (* ... *)
     ]} *)
 
-val many : (t -> 'a) -> t -> 'a list
-(** [many input_value in_stream] *)
+val many : (t -> 'a option) -> t -> 'a list
+(** [many input in_stream] *)
 
-(** {2 Inputting integer values} *)
-
-(** Input bytes and decode them into integer values. *)
+(** {3 Inputs integer values} *)
 
 val input_char : t -> char
-(** [input_char in_stream] *)
-
 val input_int8 : t -> int
-(** [input_int8 in_stream] *)
-
 val input_uint8 : t -> int
-(** [input_uint8 in_stream] *)
-
 val input_byte : t -> int
-(** [input_byte in_stream] *)
-
 val input_int16_be : t -> int
-(** [input_int16_be in_stream] *)
-
 val input_int16_ne : t -> int
-(** [input_int16_ne in_stream] *)
-
 val input_int16_le : t -> int
-(** [input_int16_le in_stream] *)
-
 val input_uint16_be : t -> int
-(** [input_uint16_be in_stream] *)
-
 val input_uint16_ne : t -> int
-(** [input_uint16_ne in_stream] *)
-
 val input_uint16_le : t -> int
-(** [input_uint16_le in_stream] *)
-
 val input_int32_be : t -> int32
-(** [input_int32_be in_stream] *)
-
 val input_int32_ne : t -> int32
-(** [input_int32_ne in_stream] *)
-
 val input_int32_le : t -> int32
-(** [input_int32_le in_stream] *)
-
 val input_int64_be : t -> int64
-(** [input_int64_be in_stream] *)
-
 val input_int64_ne : t -> int64
-(** [input_int64_ne in_stream] *)
-
 val input_int64_le : t -> int64
-(** [input_int64_le in_stream] *)

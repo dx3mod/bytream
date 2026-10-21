@@ -1,0 +1,6 @@
+(library
+ (name bytream_bin)
+ (public_name bytream.bin)
+ (enabled_if %{lib-available:bin})
+ (optional)
+ (libraries bytream bin))

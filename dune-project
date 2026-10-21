@@ -22,7 +22,7 @@
   "This library contains angostic I/O runtime mechanisms for organization byte streams processing for write and read in an efficient manner, e.g. for buildings codecs and protocol implementations.")
  (depends
   (ocaml
-   (>= 5.4.0))
+   (>= 4.14))
   bstr
   (alcotest :with-test))
  (depopts ozstd lwt)
