@@ -11,7 +11,7 @@ homepage: "https://github.com/dx3mod/bytream"
 bug-reports: "https://github.com/dx3mod/bytream/issues"
 depends: [
   "dune" {>= "3.15"}
-  "ocaml" {>= "4.14"}
+  "ocaml" {>= "5.2"}
   "bstr"
   "slice" {>= "0.1.0"}
   "alcotest" {with-test}
