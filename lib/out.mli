@@ -1,99 +1,156 @@
 (** Outgoing byte stream. *)
 
 type t
-(** The type for outgoing byte stream. *)
+(** The type for an outgoing byte stream. *)
 
 val make : ?buf:Bstr.t -> (Slice_bstr.t -> unit) -> t
 (** [make ?buf writer] creates an outgoing byte stream from [writer] with an
-    internal [buf] buffer. *)
+    internal buffer [buf]. *)
 
 val of_channel : ?io_buffer_size:int -> out_channel -> t
-(** [of_channel ?io_buffer_size oc] creates an outgoing byte stream by writing
-    into the output channel. *)
+(** [of_channel ?io_buffer_size oc] creates an outgoing byte stream that writes
+    to the output channel [oc]. *)
 
 val to_buffer : ?buf:bytes -> Buffer.t -> (t -> unit) -> unit
-(** [to_buffer ?buf buffer f] creates an outgoing byte stream to the [buffer],
-    which is filled by the [f] function.
+(** [to_buffer ?buf buffer f] creates an outgoing byte stream that writes to
+    [buffer], which is populated by the function [f].
 
-    The [buf] parameter defines the internal temporal buffer for copying between
-    the outgoing byte stream and the buffer. *)
+    The [buf] parameter defines the internal temporary buffer used for copying
+    data between the outgoing byte stream and the buffer. *)
 
 val to_string : (t -> unit) -> string
-(** [to_string f] is similar to {!to_buffer} function but returns an string. *)
+(** [to_string f] is similar to the {!to_buffer} function but returns a string.
+*)
 
 (** {2 Buffering mechanism} *)
 
+(** This section explains how to work with the buffering mechanism of outgoing
+    byte streams for efficient streaming of large amounts of bytes. *)
+
+val bytes_written : t -> int
+(** [bytes_written out_stream] returns the total number of bytes written to the
+    outgoing byte stream. *)
+
+val bytes_available : t -> int
+(** [bytes_available out_stream] returns the number of bytes available for
+    writing in the internal buffer. *)
+
 val buffer_size : t -> int
-(** [buffer_size out_stream] returns the number of the size of the internal
-    buffer. *)
+(** [buffer_size out_stream] returns the size of the internal buffer in bytes.
+*)
 
 exception Shifted_beyond_buffer
 
-val bytes_available : t -> int
-(** [bytes_available out_stream] returns the number of bytes available to write
-    into the internal buffer. *)
-
 val shift : t -> int -> unit
-(** [shift out_stream n] shifts the internal buffer offset on [n] bytes. *)
+(** [shift out_stream n] shifts the internal buffer offset by [n] bytes.
+
+    @raise Shifted_beyond_buffer *)
 
 val ensure_bytes : t -> int -> unit
-(** [ensure_bytes out_stream len] ensures the [len] bytes of the internal buffer
-    length. *)
+(** [ensure_bytes out_stream len] ensures that at least [len] bytes are
+    available in the internal buffer. *)
 
 val ensure_slice : t -> int -> Slice_bstr.t
-(** [ensure_bytes_at out_stream len] is similar to the {!ensure_bytes} function,
-    but it automatically advances and returns an slice. *)
+(** [ensure_slice out_stream len] is similar to {!ensure_bytes}, but it
+    automatically shifts the internal buffer offset and returns a slice. *)
 
 val flush : t -> unit
 (** [flush out_stream] flushes the outgoing byte stream. *)
 
 val with_flush : t -> (unit -> 'a) -> 'a
-(** [with_flush out_stream f] automatic flushes the outgoing byte stream after
-    call the [f] function. *)
+(** [with_flush out_stream f] automatically flushes the outgoing byte stream
+    after calling the function [f]. *)
 
-(** {2 Outputs} *)
+(** {2 Output functions} *)
 
-(** {3 Outputs into buffers} *)
+(** {3 Writing to buffers} *)
 
 val output : t -> Bstr.t -> int -> int -> unit
-(** [output out_stream buf off len] outputs the [len] bytes from the [buffer]
-    into the outgoing byte stream. *)
+(** [output out_stream buf off len] outputs [len] bytes from [buf] to the
+    outgoing byte stream. *)
 
 val really_output : t -> Bstr.t -> int -> int -> unit
-(** [output out_stream buf off len] outputs the [len] bytes from the [buffer]
-    into the outgoing byte stream with {i flushing}.
+(** [really_output out_stream buf off len] outputs [len] bytes from [buf] to the
+    outgoing byte stream and {i flushes} it.
 
-    See also {!output} function. *)
+    See also the {!output} function. *)
 
 val output_string : t -> string -> unit
-(** [output_string out_stream s] outputs the [s] string into the outgoing byte
+(** [output_string out_stream s] outputs the string [s] to the outgoing byte
     stream. *)
 
 val output_slice : t -> Slice_bstr.t -> unit
-(** [output_string out_stream s] outputs the [slice] into the outgoing byte
-    stream. *)
+(** [output_slice out_stream slice] outputs [slice] to the outgoing byte stream.
+*)
 
-(** {3 Outputs integer values} *)
+(** {3 Writing integer values} *)
 
 val output_char : t -> char -> unit
-val output_byte : t -> int -> unit
-val output_int8 : t -> int -> unit
-val output_uint8 : t -> int -> unit
-val output_int16_be : t -> int -> unit
-val output_int16_le : t -> int -> unit
-val output_int16_ne : t -> int -> unit
-val output_uint16_be : t -> int -> unit
-val output_uint16_le : t -> int -> unit
-val output_uint16_ne : t -> int -> unit
-val output_int32_be : t -> int32 -> unit
-val output_int32_le : t -> int32 -> unit
-val output_int32_ne : t -> int32 -> unit
-val output_int64_be : t -> int64 -> unit
-val output_int64_le : t -> int64 -> unit
-val output_int64_ne : t -> int64 -> unit
+(** [output_char out_stream c] outputs the character [c] to the outgoing byte
+    stream. *)
 
-(** {2 Stream transforming} *)
+val output_byte : t -> int -> unit
+(** [output_byte out_stream b] outputs the 8-bit byte [b] to the outgoing byte
+    stream. *)
+
+val output_int8 : t -> int -> unit
+(** [output_int8 out_stream n] outputs the signed 8-bit integer [n] to the
+    outgoing byte stream. *)
+
+val output_uint8 : t -> int -> unit
+(** [output_uint8 out_stream n] outputs the unsigned 8-bit integer [n] to the
+    outgoing byte stream. *)
+
+val output_int16_be : t -> int -> unit
+(** [output_int16_be out_stream n] outputs the signed 16-bit integer [n] in
+    big-endian byte order to the outgoing byte stream. *)
+
+val output_int16_le : t -> int -> unit
+(** [output_int16_le out_stream n] outputs the signed 16-bit integer [n] in
+    little-endian byte order to the outgoing byte stream. *)
+
+val output_int16_ne : t -> int -> unit
+(** [output_int16_ne out_stream n] outputs the signed 16-bit integer [n] in
+    native byte order to the outgoing byte stream. *)
+
+val output_uint16_be : t -> int -> unit
+(** [output_uint16_be out_stream n] outputs the unsigned 16-bit integer [n] in
+    big-endian byte order to the outgoing byte stream. *)
+
+val output_uint16_le : t -> int -> unit
+(** [output_uint16_le out_stream n] outputs the unsigned 16-bit integer [n] in
+    little-endian byte order to the outgoing byte stream. *)
+
+val output_uint16_ne : t -> int -> unit
+(** [output_uint16_ne out_stream n] outputs the unsigned 16-bit integer [n] in
+    native byte order to the outgoing byte stream. *)
+
+val output_int32_be : t -> int32 -> unit
+(** [output_int32_be out_stream n] outputs the signed 32-bit integer [n] in
+    big-endian byte order to the outgoing byte stream. *)
+
+val output_int32_le : t -> int32 -> unit
+(** [output_int32_le out_stream n] outputs the signed 32-bit integer [n] in
+    little-endian byte order to the outgoing byte stream. *)
+
+val output_int32_ne : t -> int32 -> unit
+(** [output_int32_ne out_stream n] outputs the signed 32-bit integer [n] in
+    native byte order to the outgoing byte stream. *)
+
+val output_int64_be : t -> int64 -> unit
+(** [output_int64_be out_stream n] outputs the signed 64-bit integer [n] in
+    big-endian byte order to the outgoing byte stream. *)
+
+val output_int64_le : t -> int64 -> unit
+(** [output_int64_le out_stream n] outputs the signed 64-bit integer [n] in
+    little-endian byte order to the outgoing byte stream. *)
+
+val output_int64_ne : t -> int64 -> unit
+(** [output_int64_ne out_stream n] outputs the signed 64-bit integer [n] in
+    native byte order to the outgoing byte stream. *)
+
+(** {2 Stream transformation} *)
 
 val transform : t -> (Slice_bstr.t -> Slice_bstr.t) -> t
-(** [transform out_stream f] transforms the outgoing stream output via [f]
-    functions. *)
+(** [transform out_stream f] transforms the output of the outgoing byte stream
+    using the function [f]. *)

@@ -2,7 +2,7 @@ type t = {
   writer : Slice_bstr.t -> unit;
   buf : Bstr.t;
   mutable off : int;
-  mutable written_total_bytes : int;
+  mutable total_written_bytes : int;
 }
 
 (* ===================================================================
@@ -14,7 +14,7 @@ let make ?buf writer =
     writer;
     buf = (match buf with None -> Bstr.create 4096 | Some buf -> buf);
     off = 0;
-    written_total_bytes = 0;
+    total_written_bytes = 0;
   }
 
 let of_channel ?(io_buffer_size = 4096) oc =
@@ -27,16 +27,20 @@ let of_channel ?(io_buffer_size = 4096) oc =
 
 exception Shifted_beyond_buffer
 
-let buffer_size { buf; _ } = Bstr.length buf
+let[@inline] buffer_size { buf; _ } = Bstr.length buf
 let[@inline] write_slice out_stream slice = out_stream.writer slice
 let[@inline] bytes_available { buf; off; _ } = Bstr.length buf - off
+let[@inline] bytes_written { total_written_bytes; _ } = total_written_bytes
+
+let unsafe_shift out_stream len =
+  out_stream.off <- out_stream.off + len;
+  out_stream.total_written_bytes <- out_stream.total_written_bytes + len
 
 let shift out_stream len =
   let shifted_written_bytes = out_stream.off + len in
 
-  if Bstr.length out_stream.buf >= shifted_written_bytes then (
-    out_stream.off <- shifted_written_bytes;
-    out_stream.written_total_bytes <- out_stream.written_total_bytes + len)
+  if Bstr.length out_stream.buf >= shifted_written_bytes then
+    (unsafe_shift [@inlined]) out_stream len
   else
     let exception Shifted_beyond_buffer in
     raise Shifted_beyond_buffer
@@ -63,13 +67,13 @@ let ensure_bytes out_stream len =
 let[@inline] unsafe_ensure_bytes_at out_stream len =
   unsafe_ensure_bytes out_stream len;
   let offset = out_stream.off in
-  shift out_stream len;
+  unsafe_shift out_stream len;
   offset
 
 let ensure_slice out_stream len =
   ensure_bytes out_stream len;
   let off = out_stream.off in
-  shift out_stream len;
+  unsafe_shift out_stream len;
   Slice_bstr.make ~off out_stream.buf
 
 (* ===================================================================
@@ -127,7 +131,7 @@ let[@inline] rec gen_output
     blit buffer ~src_off:off out_stream.buf ~dst_off:out_stream.off
       ~len:batched_bytes;
 
-    shift out_stream batched_bytes;
+    unsafe_shift out_stream batched_bytes;
 
     gen_output ~blit ~buffer_length out_stream buffer (off + batched_bytes)
       (len - batched_bytes)
