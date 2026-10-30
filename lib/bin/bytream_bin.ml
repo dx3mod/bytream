@@ -3,8 +3,11 @@ module In = struct
     let decode = Bin.Staged.unstage @@ Bin.decode_bstr decoding in
 
     let rec aux Slice.{ buf; off; len } =
-      match decode ~len buf (ref @@ Bin.Off.v off) with
-      | decoded_value -> decoded_value
+      let v_off = ref @@ Bin.Off.v off in
+      match decode ~len buf v_off with
+      | decoded_value ->
+          Bytream.In.shift in_stream (Obj.magic !v_off - off);
+          decoded_value
       | exception Bin_error.Error { kind = Truncated { need; _ }; _ } ->
           let slice = Slice_bstr.create (Bin_type.Len.to_int need) in
           Bytream.In.really_input in_stream slice.buf 0 slice.len;
@@ -20,7 +23,7 @@ module Out = struct
     let encode = Bin.Staged.unstage @@ Bin.encode_bstr encoding in
 
     let Slice.{ buf; off; len } =
-      if Bytream.Out.buffer_size out_stream > encoding_size then
+      if Bytream.Out.buffer_size out_stream >= encoding_size then
         Bytream.Out.ensure_slice out_stream encoding_size
       else Slice_bstr.create encoding_size
     in

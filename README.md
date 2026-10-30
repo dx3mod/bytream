@@ -111,8 +111,8 @@ type point = { x : int; y : int }
 let point_codec = 
   let open Bin in 
   record (fun x y -> { x; y })
-  |+ field int16_ne (fun t -> t.x)
-  |+ field int16_ne (fun t -> t.y)
+  |+ field neint16 (fun t -> t.x)
+  |+ field neint16 (fun t -> t.y)
   |> sealr
 
 let _ = 

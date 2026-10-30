@@ -42,5 +42,3 @@ module Out = struct
     let oc = Lwt_io.of_unix_fd ~mode:Output unix_fd in
     of_channel ?io_buffer_size oc
 end
-
-
