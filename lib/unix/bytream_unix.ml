@@ -16,8 +16,7 @@ module Out = struct
     let rec really_write_bigarray buffer offset = function
       | 0 -> ()
       | length ->
-          let written_bytes = Unix.write_bigarray fd buffer 0 length in
-
+          let written_bytes = Unix.write_bigarray fd buffer offset length in
           really_write_bigarray buffer (offset + written_bytes)
             (length - written_bytes)
     in
