@@ -13,7 +13,7 @@
 
 (license MIT)
 
-; (documentation https://url/to/documentation)
+(documentation "https://dx3mod.github.io/bytream/")
 
 (package
  (name bytream)

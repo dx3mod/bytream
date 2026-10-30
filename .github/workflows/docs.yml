@@ -1,0 +1,59 @@
+name: Build and Deploy Documentation
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch: # Позволяет запускать сборку вручную из вкладки Actions
+
+# Настройка прав для токена GITHUB_TOKEN, чтобы разрешить деплой на Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Отмена предыдущих запущенных сборок при новом пуше, чтобы экономить ресурсы
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.5'
+          dune-cache: true
+
+      - name: Install dependencies
+        run: |
+          opam install lwt ozstd bin
+          opam install . --deps-only --with-doc
+          opam install odoc # Явная установка odoc на всякий случай
+
+      - name: Build documentation
+        run: opam exec -- dune build @doc
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_build/default/_doc/_html'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,5 +1,7 @@
 # Bytream
 
+[![Documentation](https://img.shields.io/badge/documentation-API-blue)](https://dx3mod.github.io/bytream/)
+
 A streaming bytes and crunching them library.
 
 This library provides agnostic I/O primitives for efficient, incremental byte stream processing. It is specifically designed for building codecs, binary parsers, and network protocol implementations without requiring the entire payload to fit in memory.
