@@ -5,11 +5,16 @@ type t
 
 val make : ?buf:Bstr.t -> (Slice_bstr.t -> unit) -> t
 (** [make ?buf writer] creates an outgoing byte stream from [writer] with an
-    internal buffer [buf]. *)
+    internal buffer [buf].
+
+    @raise Assert_failure if [buf] has length 0. *)
 
 val of_channel : ?io_buffer_size:int -> out_channel -> t
 (** [of_channel ?io_buffer_size oc] creates an outgoing byte stream that writes
-    to the output channel [oc]. *)
+    to the output channel [oc].
+
+    Note: the output channel [oc] is {b not} closed when the stream is garbage
+    collected. You must close it explicitly if needed. *)
 
 val to_buffer : ?buf:bytes -> Buffer.t -> (t -> unit) -> unit
 (** [to_buffer ?buf buffer f] creates an outgoing byte stream that writes to
@@ -19,8 +24,7 @@ val to_buffer : ?buf:bytes -> Buffer.t -> (t -> unit) -> unit
     data between the outgoing byte stream and the buffer. *)
 
 val to_string : (t -> unit) -> string
-(** [to_string f] is similar to the {!to_buffer} function but returns a string.
-*)
+(** [to_string f] is similar to {!to_buffer} but returns a string. *)
 
 (** {2 Buffering mechanism} *)
 
@@ -44,22 +48,32 @@ exception Shifted_beyond_buffer
 val shift : t -> int -> unit
 (** [shift out_stream n] shifts the internal buffer offset by [n] bytes.
 
-    @raise Shifted_beyond_buffer *)
+    @raise Shifted_beyond_buffer
+      if [n] is negative or exceeds the available space in the internal buffer.
+*)
 
 val ensure_bytes : t -> int -> unit
 (** [ensure_bytes out_stream len] ensures that at least [len] bytes are
-    available in the internal buffer. *)
+    available in the internal buffer. If not enough space is available, the
+    buffer is flushed first.
+
+    @raise Assert_failure if [len] is negative or greater than {!buffer_size}.
+*)
 
 val ensure_slice : t -> int -> Slice_bstr.t
 (** [ensure_slice out_stream len] is similar to {!ensure_bytes}, but it
     automatically shifts the internal buffer offset and returns a slice. *)
+
+val ensure_buffer : t -> int -> Bstr.t
+(** [ensure_buffer out_stream len] is similar to {!ensure_slice}, but returns a
+    sub-buffer of the internal buffer instead of a slice. *)
 
 val flush : t -> unit
 (** [flush out_stream] flushes the outgoing byte stream. *)
 
 val with_flush : t -> (unit -> 'a) -> 'a
 (** [with_flush out_stream f] automatically flushes the outgoing byte stream
-    after calling the function [f]. *)
+    after calling the function [f], even if [f] raises an exception. *)
 
 (** {2 Output functions} *)
 
@@ -73,7 +87,7 @@ val really_output : t -> Bstr.t -> int -> int -> unit
 (** [really_output out_stream buf off len] outputs [len] bytes from [buf] to the
     outgoing byte stream and {i flushes} it.
 
-    See also the {!output} function. *)
+    See also {!output}. *)
 
 val output_string : t -> string -> unit
 (** [output_string out_stream s] outputs the string [s] to the outgoing byte
