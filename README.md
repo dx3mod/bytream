@@ -73,8 +73,7 @@ let in_stream = Bytream.In.of_channel ic in
 let in_stream = Bytream_unix.In.of_fd fd in
 
 (* Lwt asynchronous I/O *)
-let%lwt in_stream = Bytream_lwt.In.of_channel ic in
-(* ... process stream ... *)
+let in_stream = Bytream_lwt.In.of_channel ic in
 ```
 
 The Bytream API is intentionally designed to feel familiar, closely mirroring the standard In_channel and Out_channel modules, but with streaming capabilities:
@@ -138,6 +137,31 @@ let output_compressed_string out_stream =
 let input_decompressed_line in_stream = 
   let decompressed_stream = Bytream_ozstd.In.make in_stream in 
   Bytream.In.input_line decompressed_stream
+```
+
+### Lwt integration
+
+For asynchronous I/O, Bytream provides the `bytream.lwt` package to bridge Lwt channels with Bytream's incoming and outgoing byte streams. To preserve this ergonomic, direct-style API without blocking the Lwt event loop, `Bytream_lwt` relies on the `Lwt_direct` module.
+
+```ocaml
+#require "bytream.lwt";;
+
+open Lwt.Syntax
+
+let () =
+  Lwt_main.run
+  @@
+  let* ic = Lwt_io.open_file ~mode:Lwt_io.input "input.txt" in
+  let* oc = Lwt_io.open_file ~mode:Lwt_io.output "output.txt" in
+
+  let in_stream = Bytream_lwt.In.of_channel ic in
+  let out_stream = Bytream_lwt.Out.of_channel oc in
+
+  Lwt_direct.spawn begin fun () ->
+      let line = Bytream.In.input_line in_stream in
+      Bytream.Out.output_string out_stream (Option.get line);
+      Bytream.Out.flush out_stream
+    end
 ```
 
 ### Showcases
